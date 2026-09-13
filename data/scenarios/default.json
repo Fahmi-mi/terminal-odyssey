@@ -1,0 +1,61 @@
+{
+  "scenario_id": "default",
+  "name": "Perkemahan Darurat Oakhaven",
+  "description": "Skenario awal standar dengan perbekalan yang cukup untuk memulai pembangunan desa",
+  "village": {
+    "name": "Oakhaven",
+    "level": 1,
+    "lumber": 60,
+    "stone": 30,
+    "rations": 40,
+    "treasury": 200,
+    "settlers": 6,
+    "workers": {
+      "farmers": 2,
+      "lumberjacks": 2,
+      "miners": 1,
+      "blacksmiths": 0,
+      "militia": 1
+    },
+    "buildings": {
+      "Balai Desa": 1,
+      "Gudang Logistik": 1,
+      "Bengkel Pandai Besi": 0,
+      "Pusat Latihan": 0,
+      "Laboratorium Alkimia": 0,
+      "Kedai Minum": 0,
+      "Pos Kafilah": 0
+    }
+  },
+  "player": {
+    "name": "Sang Petualang",
+    "hp": 100,
+    "max_hp": 100,
+    "sanity": 100,
+    "max_sanity": 100,
+    "torch_meter": 100,
+    "max_backpack": 12,
+    "stats": {
+      "might": 10,
+      "agility": 10,
+      "resolve": 10,
+      "ingenuity": 10
+    },
+    "equipped_weapon": {
+      "id": "rusty_sword",
+      "name": "Pedang Besi Tua",
+      "weapon_type": "Sword",
+      "base_damage": [5, 9],
+      "crit_rate": 0.05,
+      "initiative": 10,
+      "durability": 50,
+      "max_dura": 50,
+      "special_affix": "Standar"
+    }
+  },
+  "initial_logs": [
+    "[+] Pemukiman darurat didirikan di lembah berkabut Oakhaven",
+    "[i] Para pekerja siap menerima instruksi Anda",
+    "[i] Tekan [SPACE] untuk memulai hari dan menjalankan siklus produksi"
+  ]
+}

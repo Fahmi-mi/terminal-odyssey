@@ -1,0 +1,58 @@
+[
+  {
+    "name": "Balai Desa",
+    "description": "Pusat administrasi (+5 kapasitas maksimal populasi warga)",
+    "max_level": 5,
+    "base_wood_cost": 40,
+    "base_stone_cost": 30,
+    "base_gold_cost": 100
+  },
+  {
+    "name": "Gudang Logistik",
+    "description": "Memperluas kapasitas Kayu (+50), Batu (+25), dan Ransum (+30)",
+    "max_level": 5,
+    "base_wood_cost": 35,
+    "base_stone_cost": 20,
+    "base_gold_cost": 60
+  },
+  {
+    "name": "Bengkel Pandai Besi",
+    "description": "Membuka penempaan senjata, perisai, dan modifikasi monster",
+    "max_level": 3,
+    "base_wood_cost": 50,
+    "base_stone_cost": 45,
+    "base_gold_cost": 120
+  },
+  {
+    "name": "Pusat Latihan",
+    "description": "Melatih & menaikkan stat karakter (Might, Agi, Res, Ing)",
+    "max_level": 3,
+    "base_wood_cost": 40,
+    "base_stone_cost": 25,
+    "base_gold_cost": 80
+  },
+  {
+    "name": "Laboratorium Alkimia",
+    "description": "Mengolah herba menjadi salep HP, penawar racun, dan obor",
+    "max_level": 3,
+    "base_wood_cost": 30,
+    "base_stone_cost": 20,
+    "base_gold_cost": 70
+  },
+  {
+    "name": "Kedai Minum",
+    "description": "Pusat rekrutmen rekan petualang (Companion) dan rumor pasar",
+    "max_level": 3,
+    "base_wood_cost": 45,
+    "base_stone_cost": 15,
+    "base_gold_cost": 90
+  },
+  {
+    "name": "Pos Kafilah",
+    "description": "Membuka kafilah dagang antar-kota dan arbitrase komoditas",
+    "max_level": 3,
+    "base_wood_cost": 60,
+    "base_stone_cost": 40,
+    "base_gold_cost": 150
+  }
+]
