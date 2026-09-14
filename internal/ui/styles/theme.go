@@ -1,6 +1,7 @@
 package styles
 
 import (
+	"fmt"
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
@@ -128,3 +129,58 @@ var (
 func CleanText(s string) string {
 	return strings.ReplaceAll(s, "\ufe0f", "")
 }
+
+// RenderHPBar renders an ASCII health bar using = and -
+func RenderHPBar(current, maxVal, barLen int) string {
+	if maxVal <= 0 {
+		maxVal = 1
+	}
+	if current < 0 {
+		current = 0
+	}
+	if current > maxVal {
+		current = maxVal
+	}
+
+	filled := (current * barLen) / maxVal
+	empty := barLen - filled
+
+	filledStr := strings.Repeat("=", filled)
+	emptyStr := strings.Repeat("-", empty)
+
+	colorStyle := AlertSuccess
+	ratio := float64(current) / float64(maxVal)
+	if ratio <= 0.35 {
+		colorStyle = AlertError
+	} else if ratio <= 0.65 {
+		colorStyle = AlertWarning
+	}
+
+	return fmt.Sprintf("[%s%s] %d/%d HP", colorStyle.Render(filledStr), ResourceLabel.Render(emptyStr), current, maxVal)
+}
+
+// WrapText splits a long text string into multiple lines of at most maxWidth characters
+func WrapText(text string, maxWidth int) []string {
+	if maxWidth <= 0 {
+		return []string{text}
+	}
+	words := strings.Fields(text)
+	if len(words) == 0 {
+		return []string{""}
+	}
+
+	var lines []string
+	currentLine := words[0]
+
+	for _, w := range words[1:] {
+		if lipgloss.Width(currentLine)+1+lipgloss.Width(w) <= maxWidth {
+			currentLine += " " + w
+		} else {
+			lines = append(lines, currentLine)
+			currentLine = w
+		}
+	}
+	lines = append(lines, currentLine)
+	return lines
+}
+

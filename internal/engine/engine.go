@@ -5,6 +5,7 @@ import (
 
 	"github.com/Fahmi-mi/terminal-odyssey/data"
 	"github.com/Fahmi-mi/terminal-odyssey/internal/character"
+	"github.com/Fahmi-mi/terminal-odyssey/internal/dungeon"
 	"github.com/Fahmi-mi/terminal-odyssey/internal/settlement"
 )
 
@@ -24,6 +25,17 @@ const (
 	StateExpeditionSummary
 )
 
+// ExpeditionSummary stores the results of a finished dungeon run
+type ExpeditionSummary struct {
+	WasEvacuated    bool
+	GoldEarned      int
+	LumberEarned    int
+	StoneEarned     int
+	EnemiesDefeated int
+	RoomsExplored   int
+	TotalRooms      int
+}
+
 // Engine is the central game manager coordinating state, settlement, player, and world simulation
 type Engine struct {
 	CurrentState  GameState
@@ -36,6 +48,9 @@ type Engine struct {
 	Village *settlement.Settlement
 	Player  *character.Player
 
+	ActiveExpedition      *dungeon.Expedition
+	LastExpeditionSummary *ExpeditionSummary
+
 	DailyLogs   []string
 	StatusAlert string // temporary flash message (e.g. error or success info)
 }
@@ -45,7 +60,7 @@ func NewGame(playerName, villageName string) *Engine {
 	initialLogs := []string{
 		"[+] Pemukiman darurat didirikan di lembah berkabut Oakhaven",
 		"[i] Para pekerja siap menerima instruksi Anda",
-		"[i] Tekan [SPACE] untuk memulai hari dan menjalankan siklus produksi",
+		"[i] Tekan [D] untuk melewati hari dan menjalankan siklus produksi",
 	}
 
 	if sc, err := data.LoadDefaultScenario(); err == nil && len(sc.InitialLogs) > 0 {
@@ -74,6 +89,14 @@ func (e *Engine) PassDay() settlement.DailyResult {
 	newSeason := settlement.Season(seasonIdx)
 
 	simResult := e.Village.SimulateDay(e.DayCounter, e.CurrentSeason)
+
+	// Resting in village restores player HP if village is not starving
+	if !simResult.StarvationEvent {
+		e.Player.HP += 20
+		if e.Player.HP > e.Player.MaxHP {
+			e.Player.HP = e.Player.MaxHP
+		}
+	}
 
 	if newSeason != e.CurrentSeason {
 		simResult.SeasonChanged = true
@@ -107,3 +130,91 @@ func (e *Engine) SwitchState(next GameState) {
 	e.CurrentState = next
 	e.ClearAlert()
 }
+
+// StartExpedition initializes a new dungeon run, deducting rations from village storage
+func (e *Engine) StartExpedition(rationsToTake int) error {
+	if rationsToTake < 0 {
+		rationsToTake = 0
+	}
+	if e.Village.Rations < rationsToTake {
+		return fmt.Errorf("lumbung desa hanya memiliki %d ransum (butuh %d)", e.Village.Rations, rationsToTake)
+	}
+
+	e.Village.Rations -= rationsToTake
+
+	exp, err := dungeon.NewExpedition(e.Player, rationsToTake)
+	if err != nil {
+		e.Village.Rations += rationsToTake
+		return err
+	}
+
+	e.ActiveExpedition = exp
+	e.SwitchState(StateDungeonExplore)
+	return nil
+}
+
+// FinishExpedition concludes the active dungeon run and transfers loot to village
+func (e *Engine) FinishExpedition(evacuated bool) {
+	if e.ActiveExpedition == nil {
+		return
+	}
+
+	exp := e.ActiveExpedition
+	wasEvac := evacuated && !exp.IsDefeated
+
+	totalRooms := exp.TotalDepths
+	if totalRooms == 0 {
+		totalRooms = len(exp.Rooms)
+	}
+	roomsExplored := exp.RoomsExploredCount
+	if roomsExplored == 0 {
+		roomsExplored = exp.CurrentRoomIdx + 1
+	}
+
+	summary := &ExpeditionSummary{
+		WasEvacuated:    wasEvac,
+		GoldEarned:      exp.GoldFound,
+		LumberEarned:    exp.LumberFound,
+		StoneEarned:     exp.StoneFound,
+		EnemiesDefeated: exp.EnemiesDefeated,
+		RoomsExplored:   roomsExplored,
+		TotalRooms:      totalRooms,
+	}
+
+	if wasEvac {
+		exp.Evacuate()
+		e.Village.Treasury += exp.GoldFound
+		e.Village.Lumber += exp.LumberFound
+		e.Village.Stone += exp.StoneFound
+		// Return leftover rations to village store
+		e.Village.Rations += exp.Rations
+
+		maxL, maxS, maxR := e.Village.StorageCap()
+		if e.Village.Lumber > maxL {
+			e.Village.Lumber = maxL
+		}
+		if e.Village.Stone > maxS {
+			e.Village.Stone = maxS
+		}
+		if e.Village.Rations > maxR {
+			e.Village.Rations = maxR
+		}
+
+		e.DailyLogs = append([]string{
+			fmt.Sprintf("[+] Ekspedisi sukses: membawa pulang +%d Emas, +%d Kayu, +%d Batu", exp.GoldFound, exp.LumberFound, exp.StoneFound),
+		}, e.DailyLogs...)
+	} else {
+		exp.HandleDefeat()
+		// 1 day passes for medical recovery
+		e.PassDay()
+		// Player wakes up in convalescence with 25 HP
+		e.Player.HP = 25
+		e.DailyLogs = append([]string{
+			"[!] Ekspedisi gagal: Karakter dievakuasi darurat ke desa dan seluruh jarahan hilang",
+		}, e.DailyLogs...)
+	}
+
+	e.LastExpeditionSummary = summary
+	e.SwitchState(StateExpeditionSummary)
+}
+

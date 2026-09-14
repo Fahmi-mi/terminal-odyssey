@@ -2,6 +2,7 @@ package views
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
@@ -66,23 +67,83 @@ func RenderTownView(e *engine.Engine, width int) string {
 
 	divider := strings.Repeat("─", contentWidth)
 
+	p := e.Player
+	w := p.EquippedWeapon
+
+	playerName := p.Name
+	maxPlayerNameLen := halfWidth - 14
+	if lipgloss.Width(playerName) > maxPlayerNameLen && maxPlayerNameLen > 3 {
+		playerName = playerName[:maxPlayerNameLen-3] + "..."
+	}
+
+	playerLeftLines := []string{
+		styles.SubtitleStyle.Render("[ PROFIL & ATRIBUT PETUALANG ]"),
+		fmt.Sprintf("  Nama      : %s", styles.ResourceVal.Render(playerName)),
+		fmt.Sprintf("  Darah (HP): %s", styles.ResourceVal.Render(fmt.Sprintf("%d / %d", p.HP, p.MaxHP))),
+		fmt.Sprintf("  Kewarasan : %s", styles.ResourceWood.Render(fmt.Sprintf("%d / %d", p.Sanity, p.MaxSanity))),
+		fmt.Sprintf("  Might     : %-3d  Agility  : %d", p.Stats.Might, p.Stats.Agility),
+		fmt.Sprintf("  Resolve   : %-3d  Ingenuity: %d", p.Stats.Resolve, p.Stats.Ingenuity),
+		fmt.Sprintf("  Kapasitas : %d Slot Ransel", p.MaxBackpack),
+	}
+
+	weaponName := w.Name
+	maxWeaponNameLen := rightWidth - 14
+	if lipgloss.Width(weaponName) > maxWeaponNameLen && maxWeaponNameLen > 3 {
+		weaponName = weaponName[:maxWeaponNameLen-3] + "..."
+	}
+
+	conditionStr := "Siap Bertualang"
+	if p.HP < p.MaxHP {
+		conditionStr = "Pemulihan (+20 HP/Hari)"
+	}
+
+	playerRightLines := []string{
+		styles.SubtitleStyle.Render("[ PERLENGKAPAN & SENJATA ]"),
+		fmt.Sprintf("  Senjata   : %s", styles.DefenseStyle.Render(weaponName)),
+		fmt.Sprintf("  Tipe/ATK  : %s (%d-%d ATK)", w.WeaponType, w.BaseDamage[0], w.BaseDamage[1]),
+		fmt.Sprintf("  Kritikal  : %.0f%% | Inisiatif: %d", w.CritRate*100, w.Initiative),
+		fmt.Sprintf("  Ketahanan : %d/%d (%s)", w.Durability, w.MaxDura, w.SpecialAffix),
+		fmt.Sprintf("  Kondisi   : %s", styles.ResourceVal.Render(conditionStr)),
+		"",
+	}
+
+	playerLeftCol := lipgloss.NewStyle().Width(halfWidth).Render(strings.Join(playerLeftLines, "\n"))
+	playerRightCol := lipgloss.NewStyle().Width(rightWidth).Render(strings.Join(playerRightLines, "\n"))
+	playerGrid := lipgloss.JoinHorizontal(lipgloss.Top, playerLeftCol, playerRightCol)
+
 	headerBox := styles.BaseBox.Width(boxWidth).Render(
 		lipgloss.JoinVertical(
 			lipgloss.Left,
 			headerLine,
 			divider,
 			detailGrid,
+			divider,
+			playerGrid,
 		),
 	)
 
-	// 2. Daily Log Box
-	logHeader := styles.SubtitleStyle.Render("LAPORAN HARIAN:")
+	// 2. Daily Log Box (Prioritizes critical events & caps to at most 3 entries)
+	logTitle := "LAPORAN HARIAN:"
+	if len(e.DailyLogs) > 3 {
+		logTitle = fmt.Sprintf("LAPORAN HARIAN (PRIORITAS UTAMA - 3 DARI %d PERISTIWA):", len(e.DailyLogs))
+		if lipgloss.Width(logTitle) > contentWidth {
+			logTitle = "LAPORAN HARIAN (3 CATATAN UTAMA):"
+		}
+	}
+	logHeader := styles.SubtitleStyle.Render(logTitle)
+
 	var logLines []string
 	if len(e.DailyLogs) == 0 {
 		logLines = append(logLines, styles.LogItemStyle.Render("Tidak ada peristiwa penting hari ini"))
 	} else {
-		for _, log := range e.DailyLogs {
-			logLines = append(logLines, styles.LogItemStyle.Render(log))
+		displayLogs := selectPriorityDailyLogs(e.DailyLogs, 3)
+		for _, log := range displayLogs {
+			displayLog := log
+			maxLen := contentWidth - 3
+			if lipgloss.Width(displayLog) > maxLen {
+				displayLog = displayLog[:maxLen-3] + "..."
+			}
+			logLines = append(logLines, styles.LogItemStyle.Render(displayLog))
 		}
 	}
 
@@ -132,3 +193,60 @@ func RenderTownView(e *engine.Engine, width int) string {
 		alertBox,
 	)
 }
+
+// selectPriorityDailyLogs selects at most maxCount logs sorted by importance
+func selectPriorityDailyLogs(logs []string, maxCount int) []string {
+	if len(logs) <= maxCount {
+		return logs
+	}
+
+	getPriority := func(log string) int {
+		// Priority 1: Critical threats, famine, deaths, freezing
+		if strings.HasPrefix(log, "[!]") || strings.Contains(log, "KELAPARAN") || strings.Contains(log, "gugur") || strings.Contains(log, "kedinginan") {
+			return 1
+		}
+		// Priority 2: Major events like season transitions
+		if strings.HasPrefix(log, "[*]") || strings.Contains(log, "PERUBAHAN MUSIM") {
+			return 2
+		}
+		// Priority 3: Milestones & positive settlement growth
+		if strings.Contains(log, "pengembara") || strings.Contains(log, "menetap") || strings.Contains(log, "ditingkatkan") {
+			return 3
+		}
+		// Priority 4: Consolidated daily production
+		if strings.Contains(log, "Produksi Harian") {
+			return 4
+		}
+		// Priority 5: Atmospheric and other informational logs
+		return 5
+	}
+
+	type scoredLog struct {
+		index    int
+		priority int
+		text     string
+	}
+
+	scored := make([]scoredLog, len(logs))
+	for i, l := range logs {
+		scored[i] = scoredLog{
+			index:    i,
+			priority: getPriority(l),
+			text:     l,
+		}
+	}
+
+	sort.SliceStable(scored, func(i, j int) bool {
+		if scored[i].priority != scored[j].priority {
+			return scored[i].priority < scored[j].priority
+		}
+		return scored[i].index < scored[j].index
+	})
+
+	result := make([]string, maxCount)
+	for i := 0; i < maxCount; i++ {
+		result[i] = scored[i].text
+	}
+	return result
+}
+
