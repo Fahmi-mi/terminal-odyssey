@@ -222,16 +222,37 @@ func (m *AppModel) updateDungeonExplore(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 					m.Engine.FinishExpedition(false)
 				}
 			}
-		}
-	case " ":
-		if room.Def.Type == dungeon.RoomTypeExit {
-			m.Engine.FinishExpedition(true)
-		} else if room.Def.Type == dungeon.RoomTypeCombat && !room.IsResolved {
-			m.Engine.SetAlert("Kalahkan musuh atau mundur sebelum melanjutkan melangkah")
 		} else {
-			if err := exp.AdvanceRoom(); err != nil {
-				m.Engine.SetAlert(err.Error())
+			choices := exp.NextRoomChoices()
+			if len(choices) == 1 {
+				if err := exp.AdvanceRoom(); err != nil {
+					m.Engine.SetAlert(err.Error())
+				}
+			} else if len(choices) > 1 {
+				m.Engine.SetAlert("Pilih jalur lorong dengan menekan 1 atau 2")
 			}
+		}
+	case "1":
+		if room.IsResolved {
+			choices := exp.NextRoomChoices()
+			if len(choices) >= 1 {
+				if err := exp.AdvanceToRoom(choices[0].GraphIdx); err != nil {
+					m.Engine.SetAlert(err.Error())
+				}
+			}
+		} else {
+			m.Engine.SetAlert("Selesaikan peristiwa di ruangan ini terlebih dahulu")
+		}
+	case "2":
+		if room.IsResolved {
+			choices := exp.NextRoomChoices()
+			if len(choices) >= 2 {
+				if err := exp.AdvanceToRoom(choices[1].GraphIdx); err != nil {
+					m.Engine.SetAlert(err.Error())
+				}
+			}
+		} else {
+			m.Engine.SetAlert("Selesaikan peristiwa di ruangan ini terlebih dahulu")
 		}
 	case "m", "M":
 		if _, err := exp.ConsumeRation(); err != nil {

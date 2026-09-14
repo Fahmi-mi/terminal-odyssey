@@ -6,6 +6,7 @@ import (
 
 	"github.com/charmbracelet/lipgloss"
 
+	"github.com/Fahmi-mi/terminal-odyssey/internal/combat"
 	"github.com/Fahmi-mi/terminal-odyssey/internal/engine"
 )
 
@@ -15,7 +16,26 @@ func TestRenderViewsBorderAlignment(t *testing.T) {
 	// Prepare views for expedition
 	_ = eng.StartExpedition(2)
 	dungeonView := RenderDungeonView(eng, 80)
+	if eng.ActiveExpedition.ActiveCombat == nil {
+		enemy, _ := combat.NewEnemyByID("skeleton_scout")
+		eng.ActiveExpedition.ActiveCombat = combat.NewCombatSession(eng.Player, enemy)
+	}
 	combatView := RenderCombatView(eng, 80)
+
+	// Prepare dungeon view variants
+	engDungeon := engine.NewGame("Sang Petualang", "Oakhaven")
+	_ = engDungeon.StartExpedition(2)
+	exp := engDungeon.ActiveExpedition
+	exp.Rooms[0].IsResolved = true
+	dungeonViewBranching := RenderDungeonView(engDungeon, 80)
+
+	exp.CurrentRoomIdx = 5
+	exp.Rooms[5].IsResolved = true
+	dungeonViewSingle := RenderDungeonView(engDungeon, 80)
+
+	exp.CurrentRoomIdx = 8
+	exp.Rooms[8].IsResolved = true
+	dungeonViewExit := RenderDungeonView(engDungeon, 80)
 
 	// Prepare summary view
 	eng.FinishExpedition(true)
@@ -39,7 +59,10 @@ func TestRenderViewsBorderAlignment(t *testing.T) {
 		{"TownViewManyLogs", RenderTownView(engWithLogs, 80)},
 		{"WorkerView", RenderWorkerView(eng, 0, 80)},
 		{"BuildView", RenderBuildView(eng, 0, 80)},
-		{"DungeonView", dungeonView},
+		{"DungeonViewUnresolved", dungeonView},
+		{"DungeonViewBranching", dungeonViewBranching},
+		{"DungeonViewSingleChoice", dungeonViewSingle},
+		{"DungeonViewExit", dungeonViewExit},
 		{"CombatView", combatView},
 		{"SummaryView", summaryView},
 	}

@@ -11,6 +11,24 @@ import (
 	"github.com/Fahmi-mi/terminal-odyssey/internal/ui/styles"
 )
 
+// formatRoomTypeBadge formats badges with distinctive colors and no padding
+func formatRoomTypeBadge(roomType string) string {
+	switch roomType {
+	case dungeon.RoomTypeCombat:
+		return lipgloss.NewStyle().Bold(true).Foreground(styles.ColorRed).Render("[Pertarungan]")
+	case dungeon.RoomTypeTreasure:
+		return lipgloss.NewStyle().Bold(true).Foreground(styles.ColorGold).Render("[Peti Karun]")
+	case dungeon.RoomTypeRest:
+		return lipgloss.NewStyle().Bold(true).Foreground(styles.ColorGreen).Render("[Suaka Istirahat]")
+	case dungeon.RoomTypeMystery:
+		return lipgloss.NewStyle().Bold(true).Foreground(styles.ColorPurple).Render("[Misteri Aksara]")
+	case dungeon.RoomTypeExit:
+		return lipgloss.NewStyle().Bold(true).Foreground(styles.ColorEmerald).Render("[Tangga Keluar]")
+	default:
+		return "[Ruangan]"
+	}
+}
+
 // renderDungeonHeader renders the unified player profile and equipment header
 func renderDungeonHeader(exp *dungeon.Expedition, titleText string, boxWidth, contentWidth int) string {
 	p := exp.Player
@@ -76,7 +94,15 @@ func RenderDungeonView(e *engine.Engine, width int) string {
 	room := exp.CurrentRoom()
 
 	// 1. Header Box (Unified with player profile, stats, weapon, and supplies)
-	roomTitle := fmt.Sprintf("RUANG %d/%d: %s", room.Index, len(exp.Rooms), strings.ToUpper(room.Def.Title))
+	totalDepths := exp.TotalDepths
+	if totalDepths == 0 {
+		totalDepths = len(exp.Rooms)
+	}
+	depth := room.Depth
+	if depth == 0 {
+		depth = room.Index
+	}
+	roomTitle := fmt.Sprintf("RUANG %d/%d: %s", depth, totalDepths, strings.ToUpper(room.Def.Title))
 	headerBox := renderDungeonHeader(exp, roomTitle, boxWidth, contentWidth)
 
 	// 2. Room Content Box
@@ -99,7 +125,7 @@ func RenderDungeonView(e *engine.Engine, width int) string {
 			contentLines = append(contentLines, fmt.Sprintf("  Musuh  : %s (HP %d/%d, %d-%d ATK)",
 				styles.AlertError.Render(room.Enemy.Name), room.Enemy.HP, room.Enemy.MaxHP, room.Enemy.MinDamage, room.Enemy.MaxDamage))
 			if room.Enemy.HP < room.Enemy.MaxHP {
-				contentLines = append(contentLines, styles.AlertWarning.Render("  Catatan: Anda sempat mundur, musuh masih terluka dan siap diserang lagi"))
+				contentLines = append(contentLines, styles.AlertWarning.Render("  Catatan: Anda sempat mundur, musuh masih terluka"))
 			} else {
 				contentLines = append(contentLines, styles.ResourceLabel.Render(fmt.Sprintf("  Bahaya : %s", room.Enemy.Description)))
 			}
@@ -130,6 +156,32 @@ func RenderDungeonView(e *engine.Engine, width int) string {
 		contentLines = append(contentLines, styles.AlertSuccess.Render("  Jalur evakuasi menuju permukaan desa terbuka lebar"))
 	}
 
+	// Branching corridors display if room is resolved
+	choices := exp.NextRoomChoices()
+	if room.IsResolved && len(choices) > 1 {
+		contentLines = append(contentLines, "")
+		contentLines = append(contentLines, styles.SubtitleStyle.Render("[ PILIHAN PERCABANGAN LORONG ]"))
+		for i, c := range choices {
+			typeBadge := formatRoomTypeBadge(c.Def.Type)
+			choiceLine := fmt.Sprintf("  [%d] %-12s : %s %s", i+1, c.BranchName, typeBadge, c.Def.Title)
+			if lipgloss.Width(choiceLine) > contentWidth-4 {
+				wrapped := styles.WrapText(choiceLine, contentWidth-4)
+				choiceLine = wrapped[0]
+			}
+			contentLines = append(contentLines, choiceLine)
+		}
+	} else if room.IsResolved && len(choices) == 1 {
+		contentLines = append(contentLines, "")
+		nextRoom := choices[0]
+		typeBadge := formatRoomTypeBadge(nextRoom.Def.Type)
+		choiceLine := fmt.Sprintf("  Jalur berikutnya: %s %s", typeBadge, nextRoom.Def.Title)
+		if lipgloss.Width(choiceLine) > contentWidth-4 {
+			wrapped := styles.WrapText(choiceLine, contentWidth-4)
+			choiceLine = wrapped[0]
+		}
+		contentLines = append(contentLines, choiceLine)
+	}
+
 	contentLines = append(contentLines, "")
 
 	// Expedition Travel Logs
@@ -142,7 +194,10 @@ func RenderDungeonView(e *engine.Engine, width int) string {
 			startIdx = len(exp.Logs) - 3
 		}
 		for _, log := range exp.Logs[startIdx:] {
-			contentLines = append(contentLines, fmt.Sprintf("  %s", log))
+			wrapped := styles.WrapText(log, contentWidth-4)
+			for _, wl := range wrapped {
+				contentLines = append(contentLines, fmt.Sprintf("  %s", wl))
+			}
 		}
 	}
 
@@ -166,25 +221,34 @@ func RenderDungeonView(e *engine.Engine, width int) string {
 			fmt.Sprintf("%s Makan", styles.KeyBadge.Render("M")),
 			fmt.Sprintf("%s Mundur ke Desa", styles.KeyBadge.Render("ESC")),
 		)
-	} else {
-		// Room specific interaction
-		if !room.IsResolved {
-			switch room.Def.Type {
-			case dungeon.RoomTypeTreasure:
-				controlActions = append(controlActions, fmt.Sprintf("%s Buka Peti", styles.KeyBadge.Render("ENTER")))
-			case dungeon.RoomTypeRest:
-				controlActions = append(controlActions, fmt.Sprintf("%s Beristirahat", styles.KeyBadge.Render("ENTER")))
-			case dungeon.RoomTypeMystery:
-				controlActions = append(controlActions, fmt.Sprintf("%s Teliti Altar", styles.KeyBadge.Render("ENTER")))
-			}
+	} else if !room.IsResolved {
+		switch room.Def.Type {
+		case dungeon.RoomTypeTreasure:
+			controlActions = append(controlActions, fmt.Sprintf("%s Buka Peti", styles.KeyBadge.Render("ENTER")))
+		case dungeon.RoomTypeRest:
+			controlActions = append(controlActions, fmt.Sprintf("%s Beristirahat", styles.KeyBadge.Render("ENTER")))
+		case dungeon.RoomTypeMystery:
+			controlActions = append(controlActions, fmt.Sprintf("%s Teliti Altar", styles.KeyBadge.Render("ENTER")))
 		}
-
+		controlActions = append(controlActions,
+			fmt.Sprintf("%s Makan", styles.KeyBadge.Render("M")),
+			fmt.Sprintf("%s Obor", styles.KeyBadge.Render("O")),
+			fmt.Sprintf("%s Mundur", styles.KeyBadge.Render("ESC")),
+		)
+	} else {
+		// Room is resolved
 		if room.Def.Type == dungeon.RoomTypeExit {
 			controlActions = append(controlActions, fmt.Sprintf("%s Selesai & Bawa Jarahan", styles.KeyBadge.Render("ENTER")))
 		} else {
-			controlActions = append(controlActions, fmt.Sprintf("%s Lanjut Melangkah", styles.KeyBadge.Render("SPACE")))
+			if len(choices) >= 2 {
+				controlActions = append(controlActions,
+					fmt.Sprintf("%s %s", styles.KeyBadge.Render("1"), choices[0].BranchName),
+					fmt.Sprintf("%s %s", styles.KeyBadge.Render("2"), choices[1].BranchName),
+				)
+			} else {
+				controlActions = append(controlActions, fmt.Sprintf("%s Lanjut Melangkah", styles.KeyBadge.Render("ENTER")))
+			}
 		}
-
 		controlActions = append(controlActions,
 			fmt.Sprintf("%s Makan", styles.KeyBadge.Render("M")),
 			fmt.Sprintf("%s Obor", styles.KeyBadge.Render("O")),
@@ -192,7 +256,7 @@ func RenderDungeonView(e *engine.Engine, width int) string {
 		)
 	}
 
-	controlsText := strings.Join(controlActions, "  |  ")
+	controlsText := strings.Join(controlActions, " | ")
 	bottomBox := styles.BaseBox.Width(boxWidth).Render(controlsText)
 
 	var alertBox string

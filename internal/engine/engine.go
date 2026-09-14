@@ -162,14 +162,23 @@ func (e *Engine) FinishExpedition(evacuated bool) {
 	exp := e.ActiveExpedition
 	wasEvac := evacuated && !exp.IsDefeated
 
+	totalRooms := exp.TotalDepths
+	if totalRooms == 0 {
+		totalRooms = len(exp.Rooms)
+	}
+	roomsExplored := exp.RoomsExploredCount
+	if roomsExplored == 0 {
+		roomsExplored = exp.CurrentRoomIdx + 1
+	}
+
 	summary := &ExpeditionSummary{
 		WasEvacuated:    wasEvac,
 		GoldEarned:      exp.GoldFound,
 		LumberEarned:    exp.LumberFound,
 		StoneEarned:     exp.StoneFound,
 		EnemiesDefeated: exp.EnemiesDefeated,
-		RoomsExplored:   exp.CurrentRoomIdx + 1,
-		TotalRooms:      len(exp.Rooms),
+		RoomsExplored:   roomsExplored,
+		TotalRooms:      totalRooms,
 	}
 
 	if wasEvac {
