@@ -122,3 +122,58 @@ func TestCombatHeal(t *testing.T) {
 		t.Errorf("expected HP %d, got %d", expectedHP, p.HP)
 	}
 }
+
+func TestWeaponDurabilityAndAffixes(t *testing.T) {
+	p := character.NewDefaultPlayer("AffixTester")
+	p.EquippedWeapon = character.Weapon{
+		ID:           "test_daggers",
+		Name:         "Belati Beracun",
+		WeaponType:   "Daggers",
+		BaseDamage:   [2]int{10, 10},
+		CritRate:     0.0,
+		Initiative:   15,
+		Durability:   2,
+		MaxDura:      2,
+		SpecialAffix: "Bisa Beracun (Bleed)",
+	}
+
+	e := &Enemy{
+		ID:         "target_dummy",
+		Name:       "Target Dummy",
+		HP:         100,
+		MaxHP:      100,
+		MinDamage:  1,
+		MaxDamage:  1,
+		Initiative: 5,
+		Defense:    0,
+	}
+
+	session := NewCombatSession(p, e)
+
+	// First hit: durability decreases from 2 to 1, bleed dealt
+	_, _, err := session.PlayerAttack()
+	if err != nil {
+		t.Fatalf("unexpected attack error: %v", err)
+	}
+	if p.EquippedWeapon.Durability != 1 {
+		t.Errorf("expected durability 1, got %d", p.EquippedWeapon.Durability)
+	}
+
+	// Second hit: durability decreases from 1 to 0
+	_, _, _ = session.PlayerAttack()
+	if p.EquippedWeapon.Durability != 0 {
+		t.Errorf("expected durability 0, got %d", p.EquippedWeapon.Durability)
+	}
+
+	// Third hit: broken weapon, durability stays 0, damage halved
+	preHP := e.HP
+	dmg, _, _ := session.PlayerAttack()
+	if p.EquippedWeapon.Durability != 0 {
+		t.Errorf("expected durability to stay 0, got %d", p.EquippedWeapon.Durability)
+	}
+	if dmg > 6 {
+		t.Errorf("expected halved damage from broken weapon, got %d", dmg)
+	}
+	_ = preHP
+}
+

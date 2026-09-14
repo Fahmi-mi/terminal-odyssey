@@ -65,6 +65,8 @@ func TestRenderViewsBorderAlignment(t *testing.T) {
 		{"DungeonViewExit", dungeonViewExit},
 		{"CombatView", combatView},
 		{"SummaryView", summaryView},
+		{"BlacksmithView", RenderBlacksmithView(eng, 0, 80)},
+		{"TrainingView", RenderTrainingView(eng, 0, 80)},
 	}
 
 	for _, tc := range testCases {

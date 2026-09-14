@@ -116,4 +116,83 @@ func TestEngineExpeditionFlow(t *testing.T) {
 	}
 }
 
+func TestEngineBlacksmithCraftAndRepair(t *testing.T) {
+	eng := NewGame("CraftTester", "Oakhaven")
+
+	// Error if Blacksmith not built
+	errNoBS := eng.CraftWeapon("iron_broadsword")
+	if errNoBS == nil {
+		t.Errorf("expected error crafting weapon without Blacksmith")
+	}
+
+	// Build Blacksmith Lvl 1
+	eng.Village.Buildings[settlement.BuildingBlacksmith] = 1
+	eng.Village.Lumber = 100
+	eng.Village.Stone = 100
+	eng.Village.Treasury = 200
+
+	// Craft iron_broadsword
+	errCraft := eng.CraftWeapon("iron_broadsword")
+	if errCraft != nil {
+		t.Fatalf("unexpected craft error: %v", errCraft)
+	}
+	if eng.Player.EquippedWeapon.ID != "iron_broadsword" {
+		t.Errorf("expected equipped weapon iron_broadsword, got %s", eng.Player.EquippedWeapon.ID)
+	}
+	if eng.Village.Lumber != 90 || eng.Village.Stone != 85 || eng.Village.Treasury != 160 {
+		t.Errorf("resources not deducted correctly after crafting")
+	}
+
+	// Damage weapon and test repair
+	eng.Player.EquippedWeapon.Durability = 20
+	errRepair := eng.RepairEquippedWeapon()
+	if errRepair != nil {
+		t.Fatalf("unexpected repair error: %v", errRepair)
+	}
+	if eng.Player.EquippedWeapon.Durability != eng.Player.EquippedWeapon.MaxDura {
+		t.Errorf("expected durability to be fully restored, got %d", eng.Player.EquippedWeapon.Durability)
+	}
+
+	// Repair when already full
+	errFullRepair := eng.RepairEquippedWeapon()
+	if errFullRepair == nil {
+		t.Errorf("expected error repairing fully intact weapon")
+	}
+}
+
+func TestEngineTrainStat(t *testing.T) {
+	eng := NewGame("TrainTester", "Oakhaven")
+
+	// Error if Training Grounds not built
+	errNoTG := eng.TrainStat("Might")
+	if errNoTG == nil {
+		t.Errorf("expected error training stat without Training Grounds")
+	}
+
+	// Build Training Grounds Lvl 1
+	eng.Village.Buildings[settlement.BuildingTrainingGround] = 1
+	eng.Village.Treasury = 300
+	eng.Village.Rations = 50
+
+	initialMight := eng.Player.Stats.Might
+	errTrain := eng.TrainStat("Might")
+	if errTrain != nil {
+		t.Fatalf("unexpected train error: %v", errTrain)
+	}
+	if eng.Player.Stats.Might != initialMight+1 {
+		t.Errorf("expected might %d, got %d", initialMight+1, eng.Player.Stats.Might)
+	}
+
+	// Train Resolve and verify MaxHP scales
+	initialHP := eng.Player.MaxHP
+	errTrainRes := eng.TrainStat("Resolve")
+	if errTrainRes != nil {
+		t.Fatalf("unexpected train resolve error: %v", errTrainRes)
+	}
+	if eng.Player.MaxHP != initialHP+5 {
+		t.Errorf("expected MaxHP %d, got %d", initialHP+5, eng.Player.MaxHP)
+	}
+}
+
+
 

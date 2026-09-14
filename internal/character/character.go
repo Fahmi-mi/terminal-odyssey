@@ -1,6 +1,8 @@
 package character
 
 import (
+	"fmt"
+
 	"github.com/Fahmi-mi/terminal-odyssey/data"
 )
 
@@ -123,3 +125,77 @@ func NewDefaultPlayer(name string) *Player {
 		},
 	}
 }
+
+// EquipWeapon equips a new weapon on the player
+func (p *Player) EquipWeapon(w Weapon) {
+	p.EquippedWeapon = w
+}
+
+// RepairWeapon restores equipped weapon durability to its maximum
+func (p *Player) RepairWeapon() int {
+	missing := p.EquippedWeapon.MaxDura - p.EquippedWeapon.Durability
+	if missing < 0 {
+		missing = 0
+	}
+	p.EquippedWeapon.Durability = p.EquippedWeapon.MaxDura
+	return missing
+}
+
+// RecalculateDerivedStats updates MaxHP and MaxBackpack based on Resolve and Might
+func (p *Player) RecalculateDerivedStats() {
+	resolveDiff := p.Stats.Resolve - 10
+	if resolveDiff < 0 {
+		resolveDiff = 0
+	}
+	oldMaxHP := p.MaxHP
+	p.MaxHP = 100 + (resolveDiff * 5)
+	if p.MaxHP > oldMaxHP {
+		p.HP += (p.MaxHP - oldMaxHP)
+	}
+	if p.HP > p.MaxHP {
+		p.HP = p.MaxHP
+	}
+
+	mightDiff := p.Stats.Might - 10
+	if mightDiff < 0 {
+		mightDiff = 0
+	}
+	p.MaxBackpack = 12 + (mightDiff / 2)
+}
+
+// UpgradeStat increments the chosen stat by 1 if below stat cap
+func (p *Player) UpgradeStat(statName string, cap int) (int, error) {
+	switch statName {
+	case "might", "Might":
+		if p.Stats.Might >= cap {
+			return p.Stats.Might, fmt.Errorf("stat Might sudah mencapai batas maksimal fasilitas (Cap: %d)", cap)
+		}
+		p.Stats.Might++
+		p.RecalculateDerivedStats()
+		return p.Stats.Might, nil
+	case "agility", "Agility":
+		if p.Stats.Agility >= cap {
+			return p.Stats.Agility, fmt.Errorf("stat Agility sudah mencapai batas maksimal fasilitas (Cap: %d)", cap)
+		}
+		p.Stats.Agility++
+		p.RecalculateDerivedStats()
+		return p.Stats.Agility, nil
+	case "resolve", "Resolve":
+		if p.Stats.Resolve >= cap {
+			return p.Stats.Resolve, fmt.Errorf("stat Resolve sudah mencapai batas maksimal fasilitas (Cap: %d)", cap)
+		}
+		p.Stats.Resolve++
+		p.RecalculateDerivedStats()
+		return p.Stats.Resolve, nil
+	case "ingenuity", "Ingenuity":
+		if p.Stats.Ingenuity >= cap {
+			return p.Stats.Ingenuity, fmt.Errorf("stat Ingenuity sudah mencapai batas maksimal fasilitas (Cap: %d)", cap)
+		}
+		p.Stats.Ingenuity++
+		p.RecalculateDerivedStats()
+		return p.Stats.Ingenuity, nil
+	default:
+		return 0, fmt.Errorf("nama atribut %s tidak valid", statName)
+	}
+}
+

@@ -3,6 +3,7 @@ package combat
 import (
 	"fmt"
 	"math/rand"
+	"strings"
 
 	"github.com/Fahmi-mi/terminal-odyssey/data"
 	"github.com/Fahmi-mi/terminal-odyssey/internal/character"
@@ -93,8 +94,16 @@ func (s *CombatSession) PlayerAttack() (int, bool, error) {
 		return 0, false, fmt.Errorf("pertempuran sudah berakhir")
 	}
 
-	weaponMin := s.Player.EquippedWeapon.BaseDamage[0]
-	weaponMax := s.Player.EquippedWeapon.BaseDamage[1]
+	w := &s.Player.EquippedWeapon
+	isBroken := false
+	if w.Durability > 0 {
+		w.Durability--
+	} else {
+		isBroken = true
+	}
+
+	weaponMin := w.BaseDamage[0]
+	weaponMax := w.BaseDamage[1]
 	if weaponMax < weaponMin {
 		weaponMax = weaponMin
 	}
@@ -105,15 +114,34 @@ func (s *CombatSession) PlayerAttack() (int, bool, error) {
 		mightBonus = 0
 	}
 
-	critChance := s.Player.EquippedWeapon.CritRate + float64(s.Player.Stats.Agility)*0.005
+	critChance := w.CritRate + float64(s.Player.Stats.Agility)*0.005
 	isCrit := rand.Float64() < critChance
 
 	total := rawDmg + mightBonus
-	if isCrit {
+
+	// Affix checks
+	if strings.Contains(w.SpecialAffix, "Tempered") {
+		total += 2
+	}
+
+	if isBroken {
+		total = total / 2
+		if total < 1 {
+			total = 1
+		}
+		isCrit = false
+		s.addLog(fmt.Sprintf("[!] Ketahanan %s habis! Serangan tumpul hanya memberi separuh kerusakan", w.Name))
+	} else if isCrit {
 		total = int(float64(total) * 1.5)
 	}
 
-	netDmg := total - s.Enemy.Defense
+	// Defense calculation (Armor-piercing check)
+	defenseVal := s.Enemy.Defense
+	if strings.Contains(w.SpecialAffix, "Penembus Zirah") {
+		defenseVal = 0
+	}
+
+	netDmg := total - defenseVal
 	if netDmg < 1 {
 		netDmg = 1
 	}
@@ -126,7 +154,17 @@ func (s *CombatSession) PlayerAttack() (int, bool, error) {
 	if isCrit {
 		s.addLog(fmt.Sprintf("[+] SERANGAN KRITIKAL! Tebasan Anda menembus pertahanan %s (-%d HP)", s.Enemy.Name, netDmg))
 	} else {
-		s.addLog(fmt.Sprintf("[+] Serangan %s mengenai %s (-%d HP)", s.Player.EquippedWeapon.Name, s.Enemy.Name, netDmg))
+		s.addLog(fmt.Sprintf("[+] Serangan %s mengenai %s (-%d HP)", w.Name, s.Enemy.Name, netDmg))
+	}
+
+	// Dagger Bleed Affix
+	if (w.WeaponType == "Daggers" || strings.Contains(w.SpecialAffix, "Bleed")) && s.Enemy.HP > 0 {
+		bleedDmg := 2 + (s.Player.Stats.Agility / 5)
+		s.Enemy.HP -= bleedDmg
+		if s.Enemy.HP < 0 {
+			s.Enemy.HP = 0
+		}
+		s.addLog(fmt.Sprintf("[*] Efek pendarahan mengoyak luka %s (-%d HP)", s.Enemy.Name, bleedDmg))
 	}
 
 	// Check if enemy defeated
@@ -138,20 +176,38 @@ func (s *CombatSession) PlayerAttack() (int, bool, error) {
 		return netDmg, isCrit, nil
 	}
 
+	// Preemptive Strike on turn 1 skips enemy counter
+	if (w.WeaponType == "Polearm" || strings.Contains(w.SpecialAffix, "Pendahuluan")) && s.TurnCount == 1 {
+		s.addLog("[*] Keunggulan jangkauan tombak menahan serangan musuh pada ronde pertama")
+		s.TurnCount++
+		return netDmg, isCrit, nil
+	}
+
+	// Blunt Stun chance
+	if (w.WeaponType == "Blunt" || strings.Contains(w.SpecialAffix, "Stun")) && (isCrit || rand.Float64() < 0.25) {
+		s.addLog(fmt.Sprintf("[*] Hantaman tumpul memicu efek Pingsan (Stun)! %s gagal menyerang balik", s.Enemy.Name))
+		s.TurnCount++
+		return netDmg, isCrit, nil
+	}
+
 	// Enemy counter-attacks
 	s.enemyCounterAttack()
 	s.TurnCount++
 	return netDmg, isCrit, nil
 }
 
-// PlayerDefend enters defensive stance, reducing next enemy damage by half
+// PlayerDefend enters defensive stance, reducing next enemy damage
 func (s *CombatSession) PlayerDefend() error {
 	if s.IsOver {
 		return fmt.Errorf("pertempuran sudah berakhir")
 	}
 
 	s.PlayerDefending = true
-	s.addLog("[i] Anda memasang kuda-kuda bertahan (+50% reduksi kerusakan musuh)")
+	if strings.Contains(s.Player.EquippedWeapon.SpecialAffix, "Block") || strings.Contains(s.Player.EquippedWeapon.SpecialAffix, "Perisai") {
+		s.addLog("[i] Anda memasang kuda-kuda tangkisan perisai (+65% reduksi kerusakan)")
+	} else {
+		s.addLog("[i] Anda memasang kuda-kuda bertahan (+50% reduksi kerusakan musuh)")
+	}
 
 	s.enemyCounterAttack()
 	s.TurnCount++
@@ -216,7 +272,11 @@ func (s *CombatSession) enemyCounterAttack() {
 
 	dmg := rand.Intn(eMax-eMin+1) + eMin
 	if s.PlayerDefending {
-		dmg = dmg / 2
+		reduction := 0.50
+		if strings.Contains(s.Player.EquippedWeapon.SpecialAffix, "Block") || strings.Contains(s.Player.EquippedWeapon.SpecialAffix, "Perisai") {
+			reduction = 0.65
+		}
+		dmg = int(float64(dmg) * (1.0 - reduction))
 		if dmg < 1 {
 			dmg = 1
 		}

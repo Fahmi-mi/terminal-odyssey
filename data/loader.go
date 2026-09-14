@@ -8,7 +8,7 @@ import (
 
 // Files embeds all JSON files in the data directory
 //
-//go:embed scenarios/*.json buildings/*.json events/*.json dungeon/*.json
+//go:embed scenarios/*.json buildings/*.json events/*.json dungeon/*.json crafting/*.json
 var Files embed.FS
 
 // ScenarioVillage holds initial village configuration
@@ -220,4 +220,37 @@ func LoadItemDefs() ([]ItemDef, error) {
 	}
 	return defs, nil
 }
+
+// RecipeDef holds blacksmith weapon crafting recipe definitions
+type RecipeDef struct {
+	ID              string  `json:"id"`
+	Name            string  `json:"name"`
+	Type            string  `json:"type"`
+	Description     string  `json:"description"`
+	MinDamage       int     `json:"min_damage"`
+	MaxDamage       int     `json:"max_damage"`
+	CritRate        float64 `json:"crit_rate"`
+	Initiative      int     `json:"initiative"`
+	Durability      int     `json:"durability"`
+	WoodCost        int     `json:"wood_cost"`
+	StoneCost       int     `json:"stone_cost"`
+	GoldCost        int     `json:"gold_cost"`
+	BlacksmithLevel int     `json:"blacksmith_level"`
+	SpecialAffix    string  `json:"special_affix"`
+}
+
+// LoadRecipeDefs reads crafting/recipes.json
+func LoadRecipeDefs() ([]RecipeDef, error) {
+	bytes, err := Files.ReadFile("crafting/recipes.json")
+	if err != nil {
+		return nil, fmt.Errorf("gagal membaca file crafting/recipes.json: %w", err)
+	}
+
+	var defs []RecipeDef
+	if err := json.Unmarshal(bytes, &defs); err != nil {
+		return nil, fmt.Errorf("gagal parsing crafting/recipes.json: %w", err)
+	}
+	return defs, nil
+}
+
 
