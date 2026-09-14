@@ -1,0 +1,74 @@
+[
+  {
+    "id": "skeleton_scout",
+    "name": "Prajurit Kerangka",
+    "description": "Kerangka prajurit kuno berbaju zirah karatan memegang pedang tumpul",
+    "max_hp": 25,
+    "min_damage": 4,
+    "max_damage": 8,
+    "initiative": 8,
+    "defense": 2,
+    "gold_reward": 15,
+    "exp_reward": 10
+  },
+  {
+    "id": "cave_spider",
+    "name": "Laba-laba Gua Raksasa",
+    "description": "Hewan berbisa penghuni celah bebatuan lembap dengan taring tajam",
+    "max_hp": 20,
+    "min_damage": 5,
+    "max_damage": 9,
+    "initiative": 12,
+    "defense": 1,
+    "gold_reward": 12,
+    "exp_reward": 10
+  },
+  {
+    "id": "goblin_raider",
+    "name": "Perampok Goblin",
+    "description": "Goblin lincah bersenjata belati bergerigi yang gemar menjebak pengembara",
+    "max_hp": 30,
+    "min_damage": 6,
+    "max_damage": 11,
+    "initiative": 11,
+    "defense": 3,
+    "gold_reward": 25,
+    "exp_reward": 15
+  },
+  {
+    "id": "crypt_ghoul",
+    "name": "Ghoul Penjarah Makam",
+    "description": "Makhluk buas pemakan bangkai berotot liat yang meraung dari kegelapan",
+    "max_hp": 40,
+    "min_damage": 8,
+    "max_damage": 14,
+    "initiative": 7,
+    "defense": 4,
+    "gold_reward": 35,
+    "exp_reward": 20
+  },
+  {
+    "id": "catacomb_wraith",
+    "name": "Arwah Penjaga Nisan",
+    "description": "Sosok bayangan gentayangan berhawa dingin membekukan di dekat sarkofagus",
+    "max_hp": 35,
+    "min_damage": 9,
+    "max_damage": 15,
+    "initiative": 10,
+    "defense": 2,
+    "gold_reward": 40,
+    "exp_reward": 25
+  },
+  {
+    "id": "tomb_overseer",
+    "name": "Panglima Makam Kuno",
+    "description": "Jenderal zirah hitam bertubuh tegap mengayunkan gada raksasa berkarat",
+    "max_hp": 65,
+    "min_damage": 11,
+    "max_damage": 18,
+    "initiative": 9,
+    "defense": 6,
+    "gold_reward": 90,
+    "exp_reward": 50
+  }
+]

@@ -40,3 +40,30 @@ func TestLoadAtmosphereEvents(t *testing.T) {
 		t.Fatalf("expected non-empty atmosphere events")
 	}
 }
+
+func TestLoadDungeonData(t *testing.T) {
+	enemies, err := LoadEnemyDefs()
+	if err != nil {
+		t.Fatalf("failed to load enemy defs: %v", err)
+	}
+	if len(enemies) < 5 {
+		t.Fatalf("expected at least 5 enemies, got %d", len(enemies))
+	}
+
+	rooms, err := LoadRoomDefs()
+	if err != nil {
+		t.Fatalf("failed to load room defs: %v", err)
+	}
+	if len(rooms) < 5 {
+		t.Fatalf("expected at least 5 rooms, got %d", len(rooms))
+	}
+
+	items, err := LoadItemDefs()
+	if err != nil {
+		t.Fatalf("failed to load item defs: %v", err)
+	}
+	if len(items) < 3 {
+		t.Fatalf("expected at least 3 items, got %d", len(items))
+	}
+}
+

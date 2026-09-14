@@ -85,11 +85,10 @@ func RenderBuildView(e *engine.Engine, selectedIdx int, width int) string {
 	)
 
 	// Controls guide
-	controls := fmt.Sprintf("%s/%s Pilih  |  %s/%s Tingkatkan (Upgrade)  |  %s Kembali",
+	controls := fmt.Sprintf("%s/%s Pilih  |  %s Tingkatkan  |  %s Kembali",
 		styles.KeyBadge.Render("↑/↓"),
 		styles.KeyBadge.Render("1-7"),
 		styles.KeyBadge.Render("ENTER"),
-		styles.KeyBadge.Render("U"),
 		styles.KeyBadge.Render("ESC"),
 	)
 

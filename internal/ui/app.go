@@ -6,6 +6,8 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
+	"github.com/Fahmi-mi/terminal-odyssey/internal/combat"
+	"github.com/Fahmi-mi/terminal-odyssey/internal/dungeon"
 	"github.com/Fahmi-mi/terminal-odyssey/internal/engine"
 	"github.com/Fahmi-mi/terminal-odyssey/internal/settlement"
 	"github.com/Fahmi-mi/terminal-odyssey/internal/ui/views"
@@ -59,6 +61,12 @@ func (m *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m.updateWorkerAssign(msg)
 		case engine.StateTownBuild:
 			return m.updateTownBuild(msg)
+		case engine.StateDungeonExplore:
+			return m.updateDungeonExplore(msg)
+		case engine.StateCombatTurn:
+			return m.updateCombatTurn(msg)
+		case engine.StateExpeditionSummary:
+			return m.updateExpeditionSummary(msg)
 		default:
 			// Fallback back to town menu
 			if msg.String() == "esc" || msg.String() == "q" {
@@ -74,7 +82,7 @@ func (m *AppModel) updateTownMenu(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
 	case "q", "Q":
 		return m, tea.Quit
-	case "d", "D", " ":
+	case "d", "D":
 		m.Engine.PassDay()
 	case "w", "W":
 		m.Engine.SwitchState(engine.StateWorkerAssign)
@@ -93,7 +101,13 @@ func (m *AppModel) updateTownMenu(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "5":
 		m.Engine.SetAlert("Kedai Minum belum memiliki rumor baru hari ini")
 	case "6":
-		m.Engine.SetAlert("Pintu Katakombe Bawah Tanah sedang dipersiapkan untuk Ekspedisi (Milestone 2)")
+		rationsToTake := 3
+		if m.Engine.Village.Rations < rationsToTake {
+			rationsToTake = m.Engine.Village.Rations
+		}
+		if err := m.Engine.StartExpedition(rationsToTake); err != nil {
+			m.Engine.SetAlert(err.Error())
+		}
 	}
 	return m, nil
 }
@@ -102,7 +116,7 @@ func (m *AppModel) updateWorkerAssign(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	maxRoles := len(views.RoleItems)
 
 	switch msg.String() {
-	case "esc", "q", "b":
+	case "esc":
 		m.Engine.SwitchState(engine.StateTownMenu)
 	case "up", "k":
 		if m.selectedWorkerIdx > 0 {
@@ -118,14 +132,14 @@ func (m *AppModel) updateWorkerAssign(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.selectedWorkerIdx = 0
 		}
 		m.Engine.ClearAlert()
-	case "right", "+", "l", "enter":
+	case "right", "+":
 		role := views.RoleItems[m.selectedWorkerIdx].Role
 		if err := m.Engine.Village.AssignWorker(role); err != nil {
 			m.Engine.SetAlert(err.Error())
 		} else {
 			m.Engine.SetAlert(fmt.Sprintf("Berhasil menugaskan +1 %s", role))
 		}
-	case "left", "-", "h":
+	case "left", "-":
 		role := views.RoleItems[m.selectedWorkerIdx].Role
 		if err := m.Engine.Village.UnassignWorker(role); err != nil {
 			m.Engine.SetAlert(err.Error())
@@ -141,7 +155,7 @@ func (m *AppModel) updateTownBuild(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	maxBuildings := len(buildings)
 
 	switch msg.String() {
-	case "esc", "q", "b":
+	case "esc":
 		m.Engine.SwitchState(engine.StateTownMenu)
 	case "up", "k":
 		if m.selectedBuildIdx > 0 {
@@ -162,20 +176,142 @@ func (m *AppModel) updateTownBuild(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		idx := val - 1
 		if idx >= 0 && idx < maxBuildings {
 			m.selectedBuildIdx = idx
-			bName := buildings[m.selectedBuildIdx]
-			if err := m.Engine.Village.UpgradeBuilding(bName); err != nil {
-				m.Engine.SetAlert(err.Error())
-			} else {
-				m.Engine.SetAlert(fmt.Sprintf("[+] %s berhasil ditingkatkan ke Level %d", bName, m.Engine.Village.Buildings[bName]))
-			}
+			m.Engine.ClearAlert()
 		}
-	case "enter", "u", "U":
+	case "enter":
 		bName := buildings[m.selectedBuildIdx]
 		if err := m.Engine.Village.UpgradeBuilding(bName); err != nil {
 			m.Engine.SetAlert(err.Error())
 		} else {
 			m.Engine.SetAlert(fmt.Sprintf("[+] %s berhasil ditingkatkan ke Level %d", bName, m.Engine.Village.Buildings[bName]))
 		}
+	}
+	return m, nil
+}
+
+func (m *AppModel) updateDungeonExplore(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	exp := m.Engine.ActiveExpedition
+	if exp == nil {
+		m.Engine.SwitchState(engine.StateTownMenu)
+		return m, nil
+	}
+
+	room := exp.CurrentRoom()
+
+	switch msg.String() {
+	case "esc":
+		// Mundur dari ekspedisi dan bawa pulang jarahan
+		m.Engine.FinishExpedition(true)
+	case "enter":
+		if room.Def.Type == dungeon.RoomTypeExit {
+			m.Engine.FinishExpedition(true)
+		} else if room.Def.Type == dungeon.RoomTypeCombat && !room.IsResolved {
+			if exp.ActiveCombat == nil && room.Enemy != nil {
+				exp.ActiveCombat = combat.NewCombatSession(exp.Player, room.Enemy)
+			}
+			m.Engine.SwitchState(engine.StateCombatTurn)
+		} else if !room.IsResolved {
+			switch room.Def.Type {
+			case dungeon.RoomTypeTreasure:
+				exp.ResolveTreasure()
+			case dungeon.RoomTypeRest:
+				exp.ResolveRest()
+			case dungeon.RoomTypeMystery:
+				exp.ResolveMystery()
+				if exp.IsDefeated {
+					m.Engine.FinishExpedition(false)
+				}
+			}
+		}
+	case " ":
+		if room.Def.Type == dungeon.RoomTypeExit {
+			m.Engine.FinishExpedition(true)
+		} else if room.Def.Type == dungeon.RoomTypeCombat && !room.IsResolved {
+			m.Engine.SetAlert("Kalahkan musuh atau mundur sebelum melanjutkan melangkah")
+		} else {
+			if err := exp.AdvanceRoom(); err != nil {
+				m.Engine.SetAlert(err.Error())
+			}
+		}
+	case "m", "M":
+		if _, err := exp.ConsumeRation(); err != nil {
+			m.Engine.SetAlert(err.Error())
+		}
+	case "o", "O":
+		if err := exp.ConsumeTorch(); err != nil {
+			m.Engine.SetAlert(err.Error())
+		}
+	}
+	return m, nil
+}
+
+func (m *AppModel) updateCombatTurn(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	exp := m.Engine.ActiveExpedition
+	if exp == nil || exp.ActiveCombat == nil {
+		m.Engine.SwitchState(engine.StateDungeonExplore)
+		return m, nil
+	}
+
+	session := exp.ActiveCombat
+
+	// If combat is already resolved, wait for confirmation
+	if session.IsOver {
+		switch msg.String() {
+		case "enter":
+			if session.Won {
+				exp.OnCombatWon()
+				m.Engine.SwitchState(engine.StateDungeonExplore)
+			} else if session.Fled {
+				exp.ActiveCombat = nil
+				m.Engine.SwitchState(engine.StateDungeonExplore)
+			} else {
+				// Player defeated
+				m.Engine.FinishExpedition(false)
+			}
+		}
+		return m, nil
+	}
+
+	// Active turn actions
+	switch msg.String() {
+	case "1":
+		session.PlayerAttack()
+		if session.Player.HP <= 0 {
+			session.IsOver = true
+			session.Won = false
+		}
+	case "2":
+		session.PlayerDefend()
+		if session.Player.HP <= 0 {
+			session.IsOver = true
+			session.Won = false
+		}
+	case "3":
+		if exp.Rations <= 0 {
+			m.Engine.SetAlert("Tidak ada ransum tersisa di dalam ransel")
+		} else {
+			exp.Rations--
+			session.PlayerHeal(25)
+			if session.Player.HP <= 0 {
+				session.IsOver = true
+				session.Won = false
+			}
+		}
+	case "4":
+		session.PlayerFlee()
+		if session.Player.HP <= 0 {
+			session.IsOver = true
+			session.Won = false
+		}
+	}
+
+	return m, nil
+}
+
+func (m *AppModel) updateExpeditionSummary(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "enter":
+		m.Engine.SwitchState(engine.StateTownMenu)
 	}
 	return m, nil
 }
@@ -189,6 +325,12 @@ func (m *AppModel) View() string {
 		return views.RenderWorkerView(m.Engine, m.selectedWorkerIdx, m.width)
 	case engine.StateTownBuild:
 		return views.RenderBuildView(m.Engine, m.selectedBuildIdx, m.width)
+	case engine.StateDungeonExplore:
+		return views.RenderDungeonView(m.Engine, m.width)
+	case engine.StateCombatTurn:
+		return views.RenderCombatView(m.Engine, m.width)
+	case engine.StateExpeditionSummary:
+		return views.RenderExpeditionSummaryView(m.Engine, m.width)
 	default:
 		return views.RenderTownView(m.Engine, m.width)
 	}

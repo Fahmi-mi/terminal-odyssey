@@ -8,7 +8,7 @@ import (
 
 // Files embeds all JSON files in the data directory
 //
-//go:embed scenarios/*.json buildings/*.json events/*.json
+//go:embed scenarios/*.json buildings/*.json events/*.json dungeon/*.json
 var Files embed.FS
 
 // ScenarioVillage holds initial village configuration
@@ -128,3 +128,96 @@ func LoadAtmosphereEvents() ([]string, error) {
 	}
 	return events, nil
 }
+
+// EnemyDef holds enemy stats and reward definitions
+type EnemyDef struct {
+	ID          string `json:"id"`
+	Name        string `json:"name"`
+	Description string `json:"description"`
+	MaxHP       int    `json:"max_hp"`
+	MinDamage   int    `json:"min_damage"`
+	MaxDamage   int    `json:"max_damage"`
+	Initiative  int    `json:"initiative"`
+	Defense     int    `json:"defense"`
+	GoldReward  int    `json:"gold_reward"`
+	ExpReward   int    `json:"exp_reward"`
+}
+
+// RoomMaterial holds material reward in treasure rooms
+type RoomMaterial struct {
+	Type   string `json:"type"`
+	Amount int    `json:"amount"`
+}
+
+// RoomDef holds dungeon room event definitions
+type RoomDef struct {
+	ID            string         `json:"id"`
+	Type          string         `json:"type"`
+	Title         string         `json:"title"`
+	Description   string         `json:"description"`
+	EnemyIDs      []string       `json:"enemy_ids,omitempty"`
+	MinGold       int            `json:"min_gold,omitempty"`
+	MaxGold       int            `json:"max_gold,omitempty"`
+	MinRations    int            `json:"min_rations,omitempty"`
+	MaxRations    int            `json:"max_rations,omitempty"`
+	Materials     []RoomMaterial `json:"materials,omitempty"`
+	HealPercent   int            `json:"heal_percent,omitempty"`
+	TorchBonus    int            `json:"torch_bonus,omitempty"`
+	StatReq       string         `json:"stat_req,omitempty"`
+	ReqValue      int            `json:"req_value,omitempty"`
+	RewardGold    int            `json:"reward_gold,omitempty"`
+	PenaltyDamage int            `json:"penalty_damage,omitempty"`
+}
+
+// ItemDef holds dungeon consumable, material, or treasure item definitions
+type ItemDef struct {
+	ID          string `json:"id"`
+	Name        string `json:"name"`
+	Description string `json:"description"`
+	Type        string `json:"type"`
+	Value       int    `json:"value"`
+	EffectValue int    `json:"effect_value"`
+}
+
+// LoadEnemyDefs reads dungeon/enemies.json
+func LoadEnemyDefs() ([]EnemyDef, error) {
+	bytes, err := Files.ReadFile("dungeon/enemies.json")
+	if err != nil {
+		return nil, fmt.Errorf("gagal membaca file dungeon/enemies.json: %w", err)
+	}
+
+	var defs []EnemyDef
+	if err := json.Unmarshal(bytes, &defs); err != nil {
+		return nil, fmt.Errorf("gagal parsing dungeon/enemies.json: %w", err)
+	}
+	return defs, nil
+}
+
+// LoadRoomDefs reads dungeon/rooms.json
+func LoadRoomDefs() ([]RoomDef, error) {
+	bytes, err := Files.ReadFile("dungeon/rooms.json")
+	if err != nil {
+		return nil, fmt.Errorf("gagal membaca file dungeon/rooms.json: %w", err)
+	}
+
+	var defs []RoomDef
+	if err := json.Unmarshal(bytes, &defs); err != nil {
+		return nil, fmt.Errorf("gagal parsing dungeon/rooms.json: %w", err)
+	}
+	return defs, nil
+}
+
+// LoadItemDefs reads dungeon/items.json
+func LoadItemDefs() ([]ItemDef, error) {
+	bytes, err := Files.ReadFile("dungeon/items.json")
+	if err != nil {
+		return nil, fmt.Errorf("gagal membaca file dungeon/items.json: %w", err)
+	}
+
+	var defs []ItemDef
+	if err := json.Unmarshal(bytes, &defs); err != nil {
+		return nil, fmt.Errorf("gagal parsing dungeon/items.json: %w", err)
+	}
+	return defs, nil
+}
+

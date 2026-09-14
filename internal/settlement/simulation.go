@@ -3,6 +3,7 @@ package settlement
 import (
 	"fmt"
 	"math/rand"
+	"strings"
 
 	"github.com/Fahmi-mi/terminal-odyssey/data"
 )
@@ -130,34 +131,21 @@ func (s *Settlement) SimulateDay(day int, currentSeason Season) DailyResult {
 		}
 	}
 
-	// 7. Generate Daily Summary Logs
-	if foodGained > 0 {
-		if currentSeason == SeasonSummer {
-			result.Logs = append(result.Logs, fmt.Sprintf("[+] Ladang menghasilkan +%d Ransum (Limpah Panen Musim Panas)", foodGained))
-		} else if currentSeason == SeasonSpring {
-			result.Logs = append(result.Logs, fmt.Sprintf("[+] Ladang menghasilkan +%d Ransum (Kondisi Musim Semi Subur)", foodGained))
-		} else {
-			result.Logs = append(result.Logs, fmt.Sprintf("[+] Petani memanen +%d Ransum", foodGained))
-		}
-	} else if currentSeason == SeasonWinter {
-		result.Logs = append(result.Logs, "[-] Ladang tertutup salju beku, tidak ada hasil panen yang dapat dipetik")
+	// 7. Consolidated Daily Production Log
+	var prodParts []string
+	if currentSeason == SeasonWinter && foodGained == 0 {
+		prodParts = append(prodParts, "0 Ransum (Beku)")
+	} else {
+		prodParts = append(prodParts, fmt.Sprintf("+%d Ransum", foodGained))
 	}
+	prodParts = append(prodParts, fmt.Sprintf("+%d Kayu", lumberGained))
+	prodParts = append(prodParts, fmt.Sprintf("+%d Batu", stoneGained))
 
-	if lumberGained > 0 {
-		if currentSeason == SeasonAutumn {
-			result.Logs = append(result.Logs, fmt.Sprintf("[+] Penebang menghasilkan +%d Kayu (+25%% Efisiensi Musim Gugur)", lumberGained))
-		} else {
-			result.Logs = append(result.Logs, fmt.Sprintf("[+] Penebang mengumpulkan +%d Kayu", lumberGained))
-		}
-	}
+	result.Logs = append(result.Logs, fmt.Sprintf("[+] Produksi Harian : %s", strings.Join(prodParts, " | ")))
 
-	if stoneGained > 0 {
-		result.Logs = append(result.Logs, fmt.Sprintf("[+] Penambang mengekstrak +%d Batu", stoneGained))
-	}
-
-	// 8. Random Atmosphere / Threat Warning Logs
+	// 8. Random Atmosphere / Threat Warning Logs (hanya jika log belum melampaui kuota)
 	s.RecalculateDefense()
-	if rand.Float64() < 0.25 && len(atmosphereEvents) > 0 {
+	if rand.Float64() < 0.25 && len(atmosphereEvents) > 0 && len(result.Logs) < 3 {
 		result.Logs = append(result.Logs, atmosphereEvents[rand.Intn(len(atmosphereEvents))])
 	}
 
