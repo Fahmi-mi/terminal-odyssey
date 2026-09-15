@@ -39,21 +39,28 @@ func renderDungeonHeader(exp *dungeon.Expedition, titleText string, boxWidth, co
 	title := styles.TitleStyle.Render(titleText)
 	divider := strings.Repeat("─", contentWidth)
 
+	mightBonus := p.Stats.Might - 10
+	if mightBonus < 0 {
+		mightBonus = 0
+	}
+	critPct := (w.CritRate + float64(p.Stats.Agility)*0.005) * 100
+	totalInit := w.Initiative + p.Stats.Agility
+
 	leftLines := []string{
 		styles.SubtitleStyle.Render("[ PROFIL & ATRIBUT ]"),
 		fmt.Sprintf("  Nama      : %s", styles.ResourceVal.Render(p.Name)),
 		fmt.Sprintf("  Darah (HP): %s", styles.ResourceVal.Render(fmt.Sprintf("%d / %d", p.HP, p.MaxHP))),
 		fmt.Sprintf("  Kewarasan : %s", styles.ResourceWood.Render(fmt.Sprintf("%d / %d", p.Sanity, p.MaxSanity))),
-		fmt.Sprintf("  Might     : %-3d  Agility  : %d", p.Stats.Might, p.Stats.Agility),
-		fmt.Sprintf("  Resolve   : %-3d  Ingenuity: %d", p.Stats.Resolve, p.Stats.Ingenuity),
+		fmt.Sprintf("  Might: %-2d (+%d ATK)  Agi: %-2d (+%d)", p.Stats.Might, mightBonus, p.Stats.Agility, p.Stats.Agility),
+		fmt.Sprintf("  Resolve: %-2d (+%d HP)  Ing: %-2d", p.Stats.Resolve, (p.Stats.Resolve-10)*5, p.Stats.Ingenuity),
 		fmt.Sprintf("  Kapasitas : %d Slot Ransel", p.MaxBackpack),
 	}
 
 	rightLines := []string{
 		styles.SubtitleStyle.Render("[ PERLENGKAPAN & LOGISTIK ]"),
 		fmt.Sprintf("  Senjata   : %s", styles.DefenseStyle.Render(w.Name)),
-		fmt.Sprintf("  Tipe/ATK  : %s (%d-%d ATK)", w.WeaponType, w.BaseDamage[0], w.BaseDamage[1]),
-		fmt.Sprintf("  Kritikal  : %.0f%% | Inisiatif: %d", w.CritRate*100, w.Initiative),
+		fmt.Sprintf("  Tipe/ATK  : %s (%d-%d ATK)", w.WeaponType, w.BaseDamage[0]+mightBonus, w.BaseDamage[1]+mightBonus),
+		fmt.Sprintf("  Kritikal  : %.1f%% | Init: %d", critPct, totalInit),
 		fmt.Sprintf("  Ketahanan : %d/%d (%s)", w.Durability, w.MaxDura, w.SpecialAffix),
 		fmt.Sprintf("  Obor/Bekal: %s | %s",
 			styles.ResourceWood.Render(fmt.Sprintf("%d%%", exp.Torch)),
@@ -154,6 +161,7 @@ func RenderDungeonView(e *engine.Engine, width int) string {
 	case dungeon.RoomTypeExit:
 		contentLines = append(contentLines, styles.SubtitleStyle.Render("[ TANGGA KELUAR ]"))
 		contentLines = append(contentLines, styles.AlertSuccess.Render("  Jalur evakuasi menuju permukaan desa terbuka lebar"))
+		contentLines = append(contentLines, styles.ItemHighlight.Render("  Tekan ENTER untuk menyelesaikan ekspedisi dan membawa pulang seluruh jarahan"))
 	}
 
 	// Branching corridors display if room is resolved
@@ -211,7 +219,12 @@ func RenderDungeonView(e *engine.Engine, width int) string {
 	// 3. Controls / Action Guide Box
 	var controlActions []string
 
-	if room.Def.Type == dungeon.RoomTypeCombat && !room.IsResolved {
+	if room.Def.Type == dungeon.RoomTypeExit {
+		controlActions = append(controlActions, fmt.Sprintf("%s Selesai & Bawa Jarahan", styles.KeyBadge.Render("ENTER")))
+		if exp.Rations > 0 && exp.Player.HP < exp.Player.MaxHP {
+			controlActions = append(controlActions, fmt.Sprintf("%s Makan", styles.KeyBadge.Render("M")))
+		}
+	} else if room.Def.Type == dungeon.RoomTypeCombat && !room.IsResolved {
 		actionText := "Bertarung"
 		if room.Enemy != nil && room.Enemy.HP < room.Enemy.MaxHP {
 			actionText = "Serang Lagi"
@@ -237,17 +250,13 @@ func RenderDungeonView(e *engine.Engine, width int) string {
 		)
 	} else {
 		// Room is resolved
-		if room.Def.Type == dungeon.RoomTypeExit {
-			controlActions = append(controlActions, fmt.Sprintf("%s Selesai & Bawa Jarahan", styles.KeyBadge.Render("ENTER")))
+		if len(choices) >= 2 {
+			controlActions = append(controlActions,
+				fmt.Sprintf("%s %s", styles.KeyBadge.Render("1"), choices[0].BranchName),
+				fmt.Sprintf("%s %s", styles.KeyBadge.Render("2"), choices[1].BranchName),
+			)
 		} else {
-			if len(choices) >= 2 {
-				controlActions = append(controlActions,
-					fmt.Sprintf("%s %s", styles.KeyBadge.Render("1"), choices[0].BranchName),
-					fmt.Sprintf("%s %s", styles.KeyBadge.Render("2"), choices[1].BranchName),
-				)
-			} else {
-				controlActions = append(controlActions, fmt.Sprintf("%s Lanjut Melangkah", styles.KeyBadge.Render("ENTER")))
-			}
+			controlActions = append(controlActions, fmt.Sprintf("%s Lanjut Melangkah", styles.KeyBadge.Render("ENTER")))
 		}
 		controlActions = append(controlActions,
 			fmt.Sprintf("%s Makan", styles.KeyBadge.Render("M")),

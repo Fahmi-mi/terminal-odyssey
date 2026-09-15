@@ -98,6 +98,7 @@ func (s *CombatSession) PlayerAttack() (int, bool, error) {
 	isBroken := false
 	if w.Durability > 0 {
 		w.Durability--
+		s.Player.SyncEquippedToOwned()
 	} else {
 		isBroken = true
 	}
@@ -109,7 +110,7 @@ func (s *CombatSession) PlayerAttack() (int, bool, error) {
 	}
 
 	rawDmg := rand.Intn(weaponMax-weaponMin+1) + weaponMin
-	mightBonus := (s.Player.Stats.Might - 10) / 2
+	mightBonus := s.Player.Stats.Might - 10
 	if mightBonus < 0 {
 		mightBonus = 0
 	}

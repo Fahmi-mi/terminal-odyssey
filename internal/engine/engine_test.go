@@ -158,6 +158,26 @@ func TestEngineBlacksmithCraftAndRepair(t *testing.T) {
 	if errFullRepair == nil {
 		t.Errorf("expected error repairing fully intact weapon")
 	}
+
+	// Switch back to starter weapon (rusty_sword)
+	errSwitch := eng.SwitchWeapon("rusty_sword")
+	if errSwitch != nil {
+		t.Fatalf("unexpected error switching weapon: %v", errSwitch)
+	}
+	if eng.Player.EquippedWeapon.ID != "rusty_sword" {
+		t.Errorf("expected equipped weapon rusty_sword, got %s", eng.Player.EquippedWeapon.ID)
+	}
+
+	// Test repairing unequipped weapon in storage
+	for i := range eng.Player.OwnedWeapons {
+		if eng.Player.OwnedWeapons[i].ID == "iron_broadsword" {
+			eng.Player.OwnedWeapons[i].Durability = 30
+		}
+	}
+	errRepairStored := eng.RepairWeaponByID("iron_broadsword")
+	if errRepairStored != nil {
+		t.Fatalf("unexpected error repairing stored weapon: %v", errRepairStored)
+	}
 }
 
 func TestEngineTrainStat(t *testing.T) {

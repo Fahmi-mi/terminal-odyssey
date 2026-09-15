@@ -314,6 +314,67 @@ func (e *Engine) RepairEquippedWeapon() error {
 	return nil
 }
 
+// SwitchWeapon switches the player's active weapon to an already owned weapon
+func (e *Engine) SwitchWeapon(weaponID string) error {
+	if err := e.Player.SwitchWeapon(weaponID); err != nil {
+		return err
+	}
+	e.SetAlert(fmt.Sprintf("Berhasil memasang %s sebagai senjata aktif", e.Player.EquippedWeapon.Name))
+	return nil
+}
+
+// RepairWeaponByID repairs a specific weapon by ID (either equipped or in armory)
+func (e *Engine) RepairWeaponByID(weaponID string) error {
+	bsLvl := e.Village.Buildings[settlement.BuildingBlacksmith]
+	if bsLvl < 1 {
+		return fmt.Errorf("bengkel Pandai Besi belum dibangun")
+	}
+
+	if weaponID == "" || weaponID == e.Player.EquippedWeapon.ID {
+		return e.RepairEquippedWeapon()
+	}
+
+	var target *character.Weapon
+	for i := range e.Player.OwnedWeapons {
+		if e.Player.OwnedWeapons[i].ID == weaponID {
+			target = &e.Player.OwnedWeapons[i]
+			break
+		}
+	}
+
+	if target == nil {
+		return fmt.Errorf("senjata tidak ditemukan di inventaris")
+	}
+
+	if target.Durability >= target.MaxDura {
+		return fmt.Errorf("ketahanan %s masih maksimal (%d/%d)", target.Name, target.Durability, target.MaxDura)
+	}
+
+	missing := target.MaxDura - target.Durability
+	goldCost := (missing * 2) / 5
+	if goldCost < 5 {
+		goldCost = 5
+	}
+	stoneCost := (missing * 1) / 5
+	if stoneCost < 2 {
+		stoneCost = 2
+	}
+
+	if e.Village.Treasury < goldCost {
+		return fmt.Errorf("kas emas tidak cukup untuk reparasi (butuh %d Gold, ada %d)", goldCost, e.Village.Treasury)
+	}
+	if e.Village.Stone < stoneCost {
+		return fmt.Errorf("batu tidak cukup untuk reparasi (butuh %d Batu, ada %d)", stoneCost, e.Village.Stone)
+	}
+
+	e.Village.Treasury -= goldCost
+	e.Village.Stone -= stoneCost
+
+	target.Durability = target.MaxDura
+	e.SetAlert(fmt.Sprintf("Berhasil memperbaiki %s (+%d Durabilitas, -%d Gold, -%d Batu)", target.Name, missing, goldCost, stoneCost))
+	return nil
+}
+
 // TrainStat upgrades a character attribute at the Training Grounds
 func (e *Engine) TrainStat(statName string) error {
 	tgLvl := e.Village.Buildings[settlement.BuildingTrainingGround]

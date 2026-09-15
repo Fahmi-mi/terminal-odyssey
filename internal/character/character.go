@@ -47,6 +47,7 @@ type Player struct {
 	MaxSanity      int
 	TorchMeter     int // 0 to 100%
 	EquippedWeapon Weapon
+	OwnedWeapons   []Weapon
 	Party          []Companion
 	Backpack       []string
 	MaxBackpack    int
@@ -54,6 +55,18 @@ type Player struct {
 
 // NewPlayerFromScenario creates a player from scenario data
 func NewPlayerFromScenario(p data.ScenarioPlayer) *Player {
+	starter := Weapon{
+		ID:           p.EquippedWeapon.ID,
+		Name:         p.EquippedWeapon.Name,
+		WeaponType:   p.EquippedWeapon.WeaponType,
+		BaseDamage:   p.EquippedWeapon.BaseDamage,
+		CritRate:     p.EquippedWeapon.CritRate,
+		Initiative:   p.EquippedWeapon.Initiative,
+		Durability:   p.EquippedWeapon.Durability,
+		MaxDura:      p.EquippedWeapon.MaxDura,
+		SpecialAffix: p.EquippedWeapon.SpecialAffix,
+	}
+
 	return &Player{
 		Name: p.Name,
 		Stats: CharacterStats{
@@ -62,25 +75,16 @@ func NewPlayerFromScenario(p data.ScenarioPlayer) *Player {
 			Resolve:   p.Stats.Resolve,
 			Ingenuity: p.Stats.Ingenuity,
 		},
-		HP:          p.HP,
-		MaxHP:       p.MaxHP,
-		Sanity:      p.Sanity,
-		MaxSanity:   p.MaxSanity,
-		TorchMeter:  p.TorchMeter,
-		MaxBackpack: p.MaxBackpack,
-		Backpack:    make([]string, 0),
-		Party:       make([]Companion, 0),
-		EquippedWeapon: Weapon{
-			ID:           p.EquippedWeapon.ID,
-			Name:         p.EquippedWeapon.Name,
-			WeaponType:   p.EquippedWeapon.WeaponType,
-			BaseDamage:   p.EquippedWeapon.BaseDamage,
-			CritRate:     p.EquippedWeapon.CritRate,
-			Initiative:   p.EquippedWeapon.Initiative,
-			Durability:   p.EquippedWeapon.Durability,
-			MaxDura:      p.EquippedWeapon.MaxDura,
-			SpecialAffix: p.EquippedWeapon.SpecialAffix,
-		},
+		HP:             p.HP,
+		MaxHP:          p.MaxHP,
+		Sanity:         p.Sanity,
+		MaxSanity:      p.MaxSanity,
+		TorchMeter:     p.TorchMeter,
+		MaxBackpack:    p.MaxBackpack,
+		Backpack:       make([]string, 0),
+		Party:          make([]Companion, 0),
+		EquippedWeapon: starter,
+		OwnedWeapons:   []Weapon{starter},
 	}
 }
 
@@ -96,6 +100,18 @@ func NewDefaultPlayer(name string) *Player {
 	}
 
 	// Fallback in case of error
+	starter := Weapon{
+		ID:           "rusty_sword",
+		Name:         "Pedang Besi Tua",
+		WeaponType:   "Sword",
+		BaseDamage:   [2]int{5, 9},
+		CritRate:     0.05,
+		Initiative:   10,
+		Durability:   50,
+		MaxDura:      50,
+		SpecialAffix: "Standar",
+	}
+
 	return &Player{
 		Name: name,
 		Stats: CharacterStats{
@@ -104,31 +120,66 @@ func NewDefaultPlayer(name string) *Player {
 			Resolve:   10,
 			Ingenuity: 10,
 		},
-		HP:          100,
-		MaxHP:       100,
-		Sanity:      100,
-		MaxSanity:   100,
-		TorchMeter:  100,
-		MaxBackpack: 12,
-		Backpack:    make([]string, 0),
-		Party:       make([]Companion, 0),
-		EquippedWeapon: Weapon{
-			ID:           "rusty_sword",
-			Name:         "Pedang Besi Tua",
-			WeaponType:   "Sword",
-			BaseDamage:   [2]int{5, 9},
-			CritRate:     0.05,
-			Initiative:   10,
-			Durability:   50,
-			MaxDura:      50,
-			SpecialAffix: "Standar",
-		},
+		HP:             100,
+		MaxHP:          100,
+		Sanity:         100,
+		MaxSanity:      100,
+		TorchMeter:     100,
+		MaxBackpack:    12,
+		Backpack:       make([]string, 0),
+		Party:          make([]Companion, 0),
+		EquippedWeapon: starter,
+		OwnedWeapons:   []Weapon{starter},
 	}
 }
 
-// EquipWeapon equips a new weapon on the player
+// EquipWeapon equips a new weapon on the player and saves it into owned weapons
 func (p *Player) EquipWeapon(w Weapon) {
+	p.SyncEquippedToOwned()
 	p.EquippedWeapon = w
+	for i, ow := range p.OwnedWeapons {
+		if ow.ID == w.ID {
+			p.OwnedWeapons[i] = w
+			return
+		}
+	}
+	p.OwnedWeapons = append(p.OwnedWeapons, w)
+}
+
+// SyncEquippedToOwned updates the equipped weapon state inside the owned list
+func (p *Player) SyncEquippedToOwned() {
+	if p.EquippedWeapon.ID == "" {
+		return
+	}
+	for i, ow := range p.OwnedWeapons {
+		if ow.ID == p.EquippedWeapon.ID {
+			p.OwnedWeapons[i] = p.EquippedWeapon
+			return
+		}
+	}
+	p.OwnedWeapons = append(p.OwnedWeapons, p.EquippedWeapon)
+}
+
+// SwitchWeapon equips an already owned weapon by ID
+func (p *Player) SwitchWeapon(weaponID string) error {
+	p.SyncEquippedToOwned()
+	for _, ow := range p.OwnedWeapons {
+		if ow.ID == weaponID {
+			p.EquippedWeapon = ow
+			return nil
+		}
+	}
+	return fmt.Errorf("senjata dengan ID %s belum dimiliki", weaponID)
+}
+
+// OwnsWeapon checks if player has weapon in owned list
+func (p *Player) OwnsWeapon(weaponID string) bool {
+	for _, ow := range p.OwnedWeapons {
+		if ow.ID == weaponID {
+			return true
+		}
+	}
+	return false
 }
 
 // RepairWeapon restores equipped weapon durability to its maximum
@@ -138,6 +189,7 @@ func (p *Player) RepairWeapon() int {
 		missing = 0
 	}
 	p.EquippedWeapon.Durability = p.EquippedWeapon.MaxDura
+	p.SyncEquippedToOwned()
 	return missing
 }
 

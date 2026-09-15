@@ -41,19 +41,26 @@ func RenderTrainingView(e *engine.Engine, selectedIdx int, width int) string {
 	halfWidth := contentWidth / 2
 	rightWidth := contentWidth - halfWidth
 
+	mightBonus := p.Stats.Might - 10
+	if mightBonus < 0 {
+		mightBonus = 0
+	}
+
 	// Header columns
 	leftLines := []string{
-		styles.SubtitleStyle.Render("[ LOGISTIK DESA ]"),
-		fmt.Sprintf("  Kas Emas : %s", styles.ResourceGold.Render(fmt.Sprintf("%d Gold", e.Village.Treasury))),
-		fmt.Sprintf("  Ransum   : %s", styles.ResourceFood.Render(fmt.Sprintf("%d Ransum", e.Village.Rations))),
+		styles.SubtitleStyle.Render("[ LOGISTIK & FASILITAS ]"),
+		fmt.Sprintf("  Kas Emas   : %s", styles.ResourceGold.Render(fmt.Sprintf("%d Gold", e.Village.Treasury))),
+		fmt.Sprintf("  Ransum     : %s", styles.ResourceFood.Render(fmt.Sprintf("%d Ransum", e.Village.Rations))),
+		fmt.Sprintf("  Kapasitas  : %d Slot Ransel", p.MaxBackpack),
 		fmt.Sprintf("  Batas Stat : %s", styles.DefenseStyle.Render(fmt.Sprintf("Maks %d (Lvl %d)", capVal, tgLvl))),
 	}
 
 	rightLines := []string{
-		styles.SubtitleStyle.Render("[ PROFIL KARAKTER ]"),
-		fmt.Sprintf("  Nama     : %s", styles.ResourceVal.Render(p.Name)),
-		fmt.Sprintf("  Darah HP : %s", styles.ResourceVal.Render(fmt.Sprintf("%d / %d", p.HP, p.MaxHP))),
-		fmt.Sprintf("  Kapasitas: %d Slot Ransel", p.MaxBackpack),
+		styles.SubtitleStyle.Render("[ EFEK ATRIBUT PETUALANG ]"),
+		fmt.Sprintf("  Nama       : %s", styles.ResourceVal.Render(p.Name)),
+		fmt.Sprintf("  Darah HP   : %s (+%d HP)", styles.ResourceVal.Render(fmt.Sprintf("%d/%d", p.HP, p.MaxHP)), (p.Stats.Resolve-10)*5),
+		fmt.Sprintf("  Bonus ATK  : +%d Serangan Fisik", mightBonus),
+		fmt.Sprintf("  Duel/Crit  : +%d Init | +%.1f%% Crit", p.Stats.Agility, float64(p.Stats.Agility)*0.5),
 	}
 
 	leftCol := lipgloss.NewStyle().Width(halfWidth).Render(strings.Join(leftLines, "\n"))

@@ -34,6 +34,35 @@ func TestEquipAndRepairWeapon(t *testing.T) {
 	if p.EquippedWeapon.Durability != 50 {
 		t.Errorf("expected durability restored to 50, got %d", p.EquippedWeapon.Durability)
 	}
+
+	// Verify both starter weapon and new weapon are stored in OwnedWeapons
+	if len(p.OwnedWeapons) != 2 {
+		t.Fatalf("expected 2 owned weapons, got %d", len(p.OwnedWeapons))
+	}
+	if !p.OwnsWeapon("rusty_sword") || !p.OwnsWeapon("iron_sword") {
+		t.Errorf("expected both rusty_sword and iron_sword to be owned")
+	}
+
+	// Switch back to rusty_sword
+	if err := p.SwitchWeapon("rusty_sword"); err != nil {
+		t.Fatalf("unexpected error switching to rusty_sword: %v", err)
+	}
+	if p.EquippedWeapon.ID != "rusty_sword" {
+		t.Errorf("expected equipped weapon rusty_sword, got %s", p.EquippedWeapon.ID)
+	}
+
+	// Switch back to iron_sword
+	if err := p.SwitchWeapon("iron_sword"); err != nil {
+		t.Fatalf("unexpected error switching to iron_sword: %v", err)
+	}
+	if p.EquippedWeapon.ID != "iron_sword" {
+		t.Errorf("expected equipped weapon iron_sword, got %s", p.EquippedWeapon.ID)
+	}
+
+	// Switch to non-existent weapon
+	if err := p.SwitchWeapon("phantom_blade"); err == nil {
+		t.Errorf("expected error switching to unowned weapon")
+	}
 }
 
 func TestUpgradeStatAndDerivedStats(t *testing.T) {

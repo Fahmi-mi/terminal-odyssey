@@ -12,8 +12,8 @@ import (
 	"github.com/Fahmi-mi/terminal-odyssey/internal/ui/styles"
 )
 
-// RenderBlacksmithView renders the modular weapon crafting and repair screen
-func RenderBlacksmithView(e *engine.Engine, selectedIdx int, width int) string {
+// RenderBlacksmithView renders the modular weapon crafting and armory screen
+func RenderBlacksmithView(e *engine.Engine, selectedRecipeIdx int, activeTab int, selectedWeaponIdx int, width int) string {
 	boxWidth := width - 4
 	if boxWidth < 74 {
 		boxWidth = 74
@@ -24,7 +24,7 @@ func RenderBlacksmithView(e *engine.Engine, selectedIdx int, width int) string {
 	contentWidth := boxWidth - 2
 
 	bsLvl := e.Village.Buildings[settlement.BuildingBlacksmith]
-	titleText := fmt.Sprintf("BENGKEL PANDAI BESI: TEMPA SENJATA (LEVEL %d)", bsLvl)
+	titleText := fmt.Sprintf("BENGKEL PANDAI BESI: TEMPA & GUDANG SENJATA (LEVEL %d)", bsLvl)
 	title := styles.TitleStyle.Render(titleText)
 	divider := strings.Repeat("─", contentWidth)
 
@@ -40,6 +40,13 @@ func RenderBlacksmithView(e *engine.Engine, selectedIdx int, width int) string {
 	}
 
 	w := e.Player.EquippedWeapon
+	mightBonus := e.Player.Stats.Might - 10
+	if mightBonus < 0 {
+		mightBonus = 0
+	}
+	critPct := (w.CritRate + float64(e.Player.Stats.Agility)*0.005) * 100
+	totalInit := w.Initiative + e.Player.Stats.Agility
+
 	repairCostGold := ((w.MaxDura - w.Durability) * 2) / 5
 	if repairCostGold < 5 && w.Durability < w.MaxDura {
 		repairCostGold = 5
@@ -57,7 +64,7 @@ func RenderBlacksmithView(e *engine.Engine, selectedIdx int, width int) string {
 	rightLines := []string{
 		styles.SubtitleStyle.Render("[ SENJATA TERPASANG ]"),
 		fmt.Sprintf("  Nama     : %s (%s)", styles.DefenseStyle.Render(w.Name), w.WeaponType),
-		fmt.Sprintf("  Stat/ATK : %d-%d ATK | %.0f%% Crit | Init %d", w.BaseDamage[0], w.BaseDamage[1], w.CritRate*100, w.Initiative),
+		fmt.Sprintf("  Stat/ATK : %d-%d ATK | %.1f%% Crit | Init %d", w.BaseDamage[0]+mightBonus, w.BaseDamage[1]+mightBonus, critPct, totalInit),
 		fmt.Sprintf("  Kondisi  : %d/%d Durabilitas (%s)", w.Durability, w.MaxDura, repairStatus),
 	}
 
@@ -74,87 +81,198 @@ func RenderBlacksmithView(e *engine.Engine, selectedIdx int, width int) string {
 		),
 	)
 
-	// Content Box: Recipe List
 	recipes, err := data.LoadRecipeDefs()
 	if err != nil {
 		return styles.AlertError.Render("[!] Gagal membaca katalog resep senjata")
 	}
 
-	if selectedIdx < 0 {
-		selectedIdx = 0
-	}
-	if selectedIdx >= len(recipes) {
-		selectedIdx = len(recipes) - 1
-	}
-
-	var contentLines []string
-	contentLines = append(contentLines, styles.SubtitleStyle.Render("[ KATALOG RESEP TEMPA ]"))
-
 	itemAvailable := lipgloss.NewStyle().Foreground(styles.ColorGreen).Padding(0, 1)
+	var contentLines []string
+	var controls []string
 
-	nameWidth := 28
-	for _, r := range recipes {
-		if len(r.Name) > nameWidth {
-			nameWidth = len(r.Name)
+	if activeTab == 0 {
+		// Tab 0: Katalog Resep Tempa
+		tabHeader := styles.ItemHighlight.Render("[1] RESEP TEMPA") + "    " + styles.ItemNormal.Render("[2/TAB] GUDANG SENJATA ("+fmt.Sprintf("%d", len(e.Player.OwnedWeapons))+")")
+		contentLines = append(contentLines, tabHeader)
+
+		if selectedRecipeIdx < 0 {
+			selectedRecipeIdx = 0
 		}
-	}
-
-	for i, r := range recipes {
-		canCraft := bsLvl >= r.BlacksmithLevel &&
-			e.Village.Lumber >= r.WoodCost &&
-			e.Village.Stone >= r.StoneCost &&
-			e.Village.Treasury >= r.GoldCost
-
-		cursor := "  "
-		if i == selectedIdx {
-			cursor = "> "
+		if selectedRecipeIdx >= len(recipes) {
+			selectedRecipeIdx = len(recipes) - 1
 		}
 
-		dmgText := fmt.Sprintf("%d-%d ATK", r.MinDamage, r.MaxDamage)
-		itemText := fmt.Sprintf("%s%-*s | %-7s | %-9s | Bengkel Lv.%d", cursor, nameWidth, r.Name, r.Type, dmgText, r.BlacksmithLevel)
+		nameWidth := 28
+		for _, r := range recipes {
+			if len(r.Name) > nameWidth {
+				nameWidth = len(r.Name)
+			}
+		}
 
-		var renderedLine string
-		if i == selectedIdx {
-			renderedLine = styles.ItemHighlight.Render(itemText)
-		} else if canCraft {
-			renderedLine = itemAvailable.Render(itemText)
+		for i, r := range recipes {
+			canCraft := bsLvl >= r.BlacksmithLevel &&
+				e.Village.Lumber >= r.WoodCost &&
+				e.Village.Stone >= r.StoneCost &&
+				e.Village.Treasury >= r.GoldCost
+
+			cursor := "  "
+			if i == selectedRecipeIdx {
+				cursor = "> "
+			}
+
+			dmgText := fmt.Sprintf("%d-%d ATK", r.MinDamage, r.MaxDamage)
+			itemText := fmt.Sprintf("%s%-*s | %-7s | %-9s | Bengkel Lv.%d", cursor, nameWidth, r.Name, r.Type, dmgText, r.BlacksmithLevel)
+
+			var renderedLine string
+			if i == selectedRecipeIdx {
+				renderedLine = styles.ItemHighlight.Render(itemText)
+			} else if canCraft {
+				renderedLine = itemAvailable.Render(itemText)
+			} else {
+				renderedLine = styles.ItemNormal.Render(itemText)
+			}
+
+			contentLines = append(contentLines, renderedLine)
+		}
+
+		contentLines = append(contentLines, "")
+
+		// Detail of selected recipe
+		sel := recipes[selectedRecipeIdx]
+		contentLines = append(contentLines, styles.SubtitleStyle.Render(fmt.Sprintf("[ RINCIAN: %s ]", strings.ToUpper(sel.Name))))
+
+		descWrapped := styles.WrapText(sel.Description, contentWidth-4)
+		for _, dw := range descWrapped {
+			contentLines = append(contentLines, styles.LogItemStyle.Render(dw))
+		}
+
+		selCritPct := (sel.CritRate + float64(e.Player.Stats.Agility)*0.005) * 100
+		selInit := sel.Initiative + e.Player.Stats.Agility
+		statLine := fmt.Sprintf("  Tipe: %-7s | ATK: %d-%d (+%d Might) | Crit: %.1f%% | Init: %d",
+			sel.Type, sel.MinDamage+mightBonus, sel.MaxDamage+mightBonus, mightBonus, selCritPct, selInit)
+		contentLines = append(contentLines, statLine)
+
+		if sel.SpecialAffix != "" {
+			contentLines = append(contentLines, fmt.Sprintf("  Efek Khusus : %s", styles.ItemHighlight.Render(sel.SpecialAffix)))
+		}
+
+		costLine := fmt.Sprintf("  Kebutuhan   : Lvl %d Bengkel | %d Kayu | %d Batu | %d Gold",
+			sel.BlacksmithLevel, sel.WoodCost, sel.StoneCost, sel.GoldCost)
+		contentLines = append(contentLines, costLine)
+
+		// Craftability / ownership status
+		if e.Player.OwnsWeapon(sel.ID) {
+			contentLines = append(contentLines, styles.AlertSuccess.Render("  Status      : Dimiliki di Gudang (Tekan [E] atau [TAB] untuk Pasang)"))
+		} else if bsLvl < sel.BlacksmithLevel {
+			contentLines = append(contentLines, styles.AlertError.Render(fmt.Sprintf("  Status      : Terkunci (Butuh Bengkel Pandai Besi Level %d)", sel.BlacksmithLevel)))
+		} else if e.Village.Lumber < sel.WoodCost || e.Village.Stone < sel.StoneCost || e.Village.Treasury < sel.GoldCost {
+			contentLines = append(contentLines, styles.AlertWarning.Render("  Status      : Material atau Kas Emas belum mencukupi"))
 		} else {
-			renderedLine = styles.ItemNormal.Render(itemText)
+			contentLines = append(contentLines, styles.AlertSuccess.Render("  Status      : Siap Ditempa"))
 		}
 
-		contentLines = append(contentLines, renderedLine)
-	}
-
-	contentLines = append(contentLines, "")
-
-	// Detail of selected recipe
-	sel := recipes[selectedIdx]
-	contentLines = append(contentLines, styles.SubtitleStyle.Render(fmt.Sprintf("[ RINCIAN: %s ]", strings.ToUpper(sel.Name))))
-
-	descWrapped := styles.WrapText(sel.Description, contentWidth-4)
-	for _, dw := range descWrapped {
-		contentLines = append(contentLines, styles.LogItemStyle.Render(dw))
-	}
-
-	statLine := fmt.Sprintf("  Tipe: %-7s | ATK: %d-%d | Crit: %.0f%% | Inisiatif: %d | Durabilitas: %d",
-		sel.Type, sel.MinDamage, sel.MaxDamage, sel.CritRate*100, sel.Initiative, sel.Durability)
-	contentLines = append(contentLines, statLine)
-
-	if sel.SpecialAffix != "" {
-		contentLines = append(contentLines, fmt.Sprintf("  Efek Khusus : %s", styles.ItemHighlight.Render(sel.SpecialAffix)))
-	}
-
-	costLine := fmt.Sprintf("  Kebutuhan   : Lvl %d Bengkel | %d Kayu | %d Batu | %d Gold",
-		sel.BlacksmithLevel, sel.WoodCost, sel.StoneCost, sel.GoldCost)
-	contentLines = append(contentLines, costLine)
-
-	// Craftability status
-	if bsLvl < sel.BlacksmithLevel {
-		contentLines = append(contentLines, styles.AlertError.Render(fmt.Sprintf("  Status      : Terkunci (Butuh Bengkel Pandai Besi Level %d)", sel.BlacksmithLevel)))
-	} else if e.Village.Lumber < sel.WoodCost || e.Village.Stone < sel.StoneCost || e.Village.Treasury < sel.GoldCost {
-		contentLines = append(contentLines, styles.AlertWarning.Render("  Status      : Material atau Kas Emas belum mencukupi"))
+		controls = []string{
+			fmt.Sprintf("%s Gudang", styles.KeyBadge.Render("TAB")),
+			fmt.Sprintf("%s Pilih", styles.KeyBadge.Render("↑/↓")),
+			fmt.Sprintf("%s Tempa", styles.KeyBadge.Render("ENTER")),
+			fmt.Sprintf("%s Reparasi", styles.KeyBadge.Render("R")),
+			fmt.Sprintf("%s Keluar", styles.KeyBadge.Render("ESC")),
+		}
 	} else {
-		contentLines = append(contentLines, styles.AlertSuccess.Render("  Status      : Siap Ditempa"))
+		// Tab 1: Gudang Senjata (Armory)
+		tabHeader := styles.ItemNormal.Render("[1/TAB] RESEP TEMPA") + "    " + styles.ItemHighlight.Render("[2] GUDANG SENJATA ("+fmt.Sprintf("%d", len(e.Player.OwnedWeapons))+")")
+		contentLines = append(contentLines, tabHeader)
+
+		owned := e.Player.OwnedWeapons
+		if selectedWeaponIdx < 0 {
+			selectedWeaponIdx = 0
+		}
+		if selectedWeaponIdx >= len(owned) {
+			selectedWeaponIdx = len(owned) - 1
+		}
+
+		for i, ow := range owned {
+			cursor := "  "
+			if i == selectedWeaponIdx {
+				cursor = "> "
+			}
+
+			isEquipped := ow.ID == e.Player.EquippedWeapon.ID
+			statusTag := "SIMPAN "
+			if isEquipped {
+				statusTag = "DIPAKAI"
+			}
+
+			dmgText := fmt.Sprintf("%2d-%2d ATK", ow.BaseDamage[0]+mightBonus, ow.BaseDamage[1]+mightBonus)
+			duraText := fmt.Sprintf("%2d/%2d Dur", ow.Durability, ow.MaxDura)
+
+			displayName := ow.Name
+			if len(displayName) > 23 {
+				displayName = displayName[:20] + "..."
+			}
+
+			lineText := fmt.Sprintf("%s%-23s | %-7s | %-9s | %s | %s", cursor, displayName, ow.WeaponType, dmgText, duraText, statusTag)
+
+			var renderedLine string
+			if i == selectedWeaponIdx {
+				renderedLine = styles.ItemHighlight.Render(lineText)
+			} else if isEquipped {
+				renderedLine = itemAvailable.Render(lineText)
+			} else {
+				renderedLine = styles.ItemNormal.Render(lineText)
+			}
+
+			contentLines = append(contentLines, renderedLine)
+		}
+
+		contentLines = append(contentLines, "")
+
+		// Detail of selected owned weapon
+		sel := owned[selectedWeaponIdx]
+		contentLines = append(contentLines, styles.SubtitleStyle.Render(fmt.Sprintf("[ RINCIAN: %s ]", strings.ToUpper(sel.Name))))
+
+		desc := "Senjata perlengkapan milik petualang"
+		for _, r := range recipes {
+			if r.ID == sel.ID {
+				desc = r.Description
+				break
+			}
+		}
+		if sel.ID == "rusty_sword" {
+			desc = "Pedang tua peninggalan masa lampau dengan bilah bergerigi karat namun tetap kokoh"
+		}
+
+		descWrapped := styles.WrapText(desc, contentWidth-4)
+		for _, dw := range descWrapped {
+			contentLines = append(contentLines, styles.LogItemStyle.Render(dw))
+		}
+
+		selCritPct := (sel.CritRate + float64(e.Player.Stats.Agility)*0.005) * 100
+		selInit := sel.Initiative + e.Player.Stats.Agility
+		statLine := fmt.Sprintf("  Tipe: %-7s | ATK: %d-%d (+%d Might) | Crit: %.1f%% | Init: %d",
+			sel.WeaponType, sel.BaseDamage[0]+mightBonus, sel.BaseDamage[1]+mightBonus, mightBonus, selCritPct, selInit)
+		contentLines = append(contentLines, statLine)
+
+		if sel.SpecialAffix != "" {
+			contentLines = append(contentLines, fmt.Sprintf("  Efek Khusus : %s", styles.ItemHighlight.Render(sel.SpecialAffix)))
+		}
+
+		condLine := fmt.Sprintf("  Kondisi     : %d/%d Durabilitas", sel.Durability, sel.MaxDura)
+		contentLines = append(contentLines, condLine)
+
+		if sel.ID == e.Player.EquippedWeapon.ID {
+			contentLines = append(contentLines, styles.AlertSuccess.Render("  Status      : Senjata Aktif Sedang Digunakan"))
+		} else {
+			contentLines = append(contentLines, styles.AlertWarning.Render("  Status      : Tersimpan di Gudang (Tekan [ENTER] untuk Memasang Senjata Ini)"))
+		}
+
+		controls = []string{
+			fmt.Sprintf("%s Tempa", styles.KeyBadge.Render("TAB")),
+			fmt.Sprintf("%s Pilih", styles.KeyBadge.Render("↑/↓")),
+			fmt.Sprintf("%s Pasang", styles.KeyBadge.Render("ENTER")),
+			fmt.Sprintf("%s Reparasi", styles.KeyBadge.Render("R")),
+			fmt.Sprintf("%s Keluar", styles.KeyBadge.Render("ESC")),
+		}
 	}
 
 	contentBox := styles.ActiveBox.Width(boxWidth).Render(
@@ -163,14 +281,6 @@ func RenderBlacksmithView(e *engine.Engine, selectedIdx int, width int) string {
 			contentLines...,
 		),
 	)
-
-	// Bottom Box (Controls)
-	controls := []string{
-		fmt.Sprintf("%s Pilih", styles.KeyBadge.Render("↑/↓")),
-		fmt.Sprintf("%s Tempa", styles.KeyBadge.Render("ENTER")),
-		fmt.Sprintf("%s Reparasi", styles.KeyBadge.Render("R")),
-		fmt.Sprintf("%s Kembali", styles.KeyBadge.Render("ESC")),
-	}
 
 	controlsText := strings.Join(controls, " | ")
 	bottomBox := styles.BaseBox.Width(boxWidth).Render(controlsText)
