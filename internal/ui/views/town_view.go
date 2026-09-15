@@ -76,13 +76,20 @@ func RenderTownView(e *engine.Engine, width int) string {
 		playerName = playerName[:maxPlayerNameLen-3] + "..."
 	}
 
+	mightBonus := p.Stats.Might - 10
+	if mightBonus < 0 {
+		mightBonus = 0
+	}
+	critPct := (w.CritRate + float64(p.Stats.Agility)*0.005) * 100
+	totalInit := w.Initiative + p.Stats.Agility
+
 	playerLeftLines := []string{
 		styles.SubtitleStyle.Render("[ PROFIL & ATRIBUT PETUALANG ]"),
 		fmt.Sprintf("  Nama      : %s", styles.ResourceVal.Render(playerName)),
 		fmt.Sprintf("  Darah (HP): %s", styles.ResourceVal.Render(fmt.Sprintf("%d / %d", p.HP, p.MaxHP))),
 		fmt.Sprintf("  Kewarasan : %s", styles.ResourceWood.Render(fmt.Sprintf("%d / %d", p.Sanity, p.MaxSanity))),
-		fmt.Sprintf("  Might     : %-3d  Agility  : %d", p.Stats.Might, p.Stats.Agility),
-		fmt.Sprintf("  Resolve   : %-3d  Ingenuity: %d", p.Stats.Resolve, p.Stats.Ingenuity),
+		fmt.Sprintf("  Might: %-2d (+%d ATK)  Agi: %-2d (+%d)", p.Stats.Might, mightBonus, p.Stats.Agility, p.Stats.Agility),
+		fmt.Sprintf("  Resolve: %-2d (+%d HP)  Ing: %-2d", p.Stats.Resolve, (p.Stats.Resolve-10)*5, p.Stats.Ingenuity),
 		fmt.Sprintf("  Kapasitas : %d Slot Ransel", p.MaxBackpack),
 	}
 
@@ -100,8 +107,8 @@ func RenderTownView(e *engine.Engine, width int) string {
 	playerRightLines := []string{
 		styles.SubtitleStyle.Render("[ PERLENGKAPAN & SENJATA ]"),
 		fmt.Sprintf("  Senjata   : %s", styles.DefenseStyle.Render(weaponName)),
-		fmt.Sprintf("  Tipe/ATK  : %s (%d-%d ATK)", w.WeaponType, w.BaseDamage[0], w.BaseDamage[1]),
-		fmt.Sprintf("  Kritikal  : %.0f%% | Inisiatif: %d", w.CritRate*100, w.Initiative),
+		fmt.Sprintf("  Tipe/ATK  : %s (%d-%d ATK)", w.WeaponType, w.BaseDamage[0]+mightBonus, w.BaseDamage[1]+mightBonus),
+		fmt.Sprintf("  Kritikal  : %.1f%% | Init: %d", critPct, totalInit),
 		fmt.Sprintf("  Ketahanan : %d/%d (%s)", w.Durability, w.MaxDura, w.SpecialAffix),
 		fmt.Sprintf("  Kondisi   : %s", styles.ResourceVal.Render(conditionStr)),
 		"",

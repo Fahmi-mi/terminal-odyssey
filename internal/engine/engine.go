@@ -2,6 +2,7 @@ package engine
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/Fahmi-mi/terminal-odyssey/data"
 	"github.com/Fahmi-mi/terminal-odyssey/internal/character"
@@ -217,4 +218,214 @@ func (e *Engine) FinishExpedition(evacuated bool) {
 	e.LastExpeditionSummary = summary
 	e.SwitchState(StateExpeditionSummary)
 }
+
+// CraftWeapon crafts a new weapon from recipe and equips it on the player
+func (e *Engine) CraftWeapon(recipeID string) error {
+	bsLvl := e.Village.Buildings[settlement.BuildingBlacksmith]
+	if bsLvl < 1 {
+		return fmt.Errorf("bengkel Pandai Besi belum dibangun")
+	}
+
+	recipes, err := data.LoadRecipeDefs()
+	if err != nil {
+		return fmt.Errorf("gagal memuat data resep senjata: %w", err)
+	}
+
+	var targetRecipe *data.RecipeDef
+	for i := range recipes {
+		if recipes[i].ID == recipeID {
+			targetRecipe = &recipes[i]
+			break
+		}
+	}
+	if targetRecipe == nil {
+		return fmt.Errorf("resep senjata dengan ID %s tidak ditemukan", recipeID)
+	}
+
+	if bsLvl < targetRecipe.BlacksmithLevel {
+		return fmt.Errorf("butuh Bengkel Pandai Besi Level %d untuk menempa %s", targetRecipe.BlacksmithLevel, targetRecipe.Name)
+	}
+
+	if e.Village.Lumber < targetRecipe.WoodCost {
+		return fmt.Errorf("kayu tidak mencukupi (butuh %d, ada %d)", targetRecipe.WoodCost, e.Village.Lumber)
+	}
+	if e.Village.Stone < targetRecipe.StoneCost {
+		return fmt.Errorf("batu tidak mencukupi (butuh %d, ada %d)", targetRecipe.StoneCost, e.Village.Stone)
+	}
+	if e.Village.Treasury < targetRecipe.GoldCost {
+		return fmt.Errorf("emas tidak mencukupi (butuh %d, ada %d)", targetRecipe.GoldCost, e.Village.Treasury)
+	}
+
+	e.Village.Lumber -= targetRecipe.WoodCost
+	e.Village.Stone -= targetRecipe.StoneCost
+	e.Village.Treasury -= targetRecipe.GoldCost
+
+	newWeapon := character.Weapon{
+		ID:           targetRecipe.ID,
+		Name:         targetRecipe.Name,
+		WeaponType:   targetRecipe.Type,
+		BaseDamage:   [2]int{targetRecipe.MinDamage, targetRecipe.MaxDamage},
+		CritRate:     targetRecipe.CritRate,
+		Initiative:   targetRecipe.Initiative,
+		Durability:   targetRecipe.Durability,
+		MaxDura:      targetRecipe.Durability,
+		SpecialAffix: targetRecipe.SpecialAffix,
+	}
+
+	e.Player.EquipWeapon(newWeapon)
+	e.SetAlert(fmt.Sprintf("Berhasil menempa %s (%s, %d-%d ATK)", targetRecipe.Name, targetRecipe.Type, targetRecipe.MinDamage, targetRecipe.MaxDamage))
+	return nil
+}
+
+// RepairEquippedWeapon repairs the currently equipped weapon in Blacksmith
+func (e *Engine) RepairEquippedWeapon() error {
+	bsLvl := e.Village.Buildings[settlement.BuildingBlacksmith]
+	if bsLvl < 1 {
+		return fmt.Errorf("bengkel Pandai Besi belum dibangun")
+	}
+
+	w := e.Player.EquippedWeapon
+	if w.Durability >= w.MaxDura {
+		return fmt.Errorf("ketahanan %s masih maksimal (%d/%d)", w.Name, w.Durability, w.MaxDura)
+	}
+
+	missing := w.MaxDura - w.Durability
+	goldCost := (missing * 2) / 5
+	if goldCost < 5 {
+		goldCost = 5
+	}
+	stoneCost := (missing * 1) / 5
+	if stoneCost < 2 {
+		stoneCost = 2
+	}
+
+	if e.Village.Treasury < goldCost {
+		return fmt.Errorf("kas emas tidak cukup untuk reparasi (butuh %d Gold, ada %d)", goldCost, e.Village.Treasury)
+	}
+	if e.Village.Stone < stoneCost {
+		return fmt.Errorf("batu tidak cukup untuk reparasi (butuh %d Batu, ada %d)", stoneCost, e.Village.Stone)
+	}
+
+	e.Village.Treasury -= goldCost
+	e.Village.Stone -= stoneCost
+
+	repaired := e.Player.RepairWeapon()
+	e.SetAlert(fmt.Sprintf("Berhasil memperbaiki %s (+%d Durabilitas, -%d Gold, -%d Batu)", w.Name, repaired, goldCost, stoneCost))
+	return nil
+}
+
+// SwitchWeapon switches the player's active weapon to an already owned weapon
+func (e *Engine) SwitchWeapon(weaponID string) error {
+	if err := e.Player.SwitchWeapon(weaponID); err != nil {
+		return err
+	}
+	e.SetAlert(fmt.Sprintf("Berhasil memasang %s sebagai senjata aktif", e.Player.EquippedWeapon.Name))
+	return nil
+}
+
+// RepairWeaponByID repairs a specific weapon by ID (either equipped or in armory)
+func (e *Engine) RepairWeaponByID(weaponID string) error {
+	bsLvl := e.Village.Buildings[settlement.BuildingBlacksmith]
+	if bsLvl < 1 {
+		return fmt.Errorf("bengkel Pandai Besi belum dibangun")
+	}
+
+	if weaponID == "" || weaponID == e.Player.EquippedWeapon.ID {
+		return e.RepairEquippedWeapon()
+	}
+
+	var target *character.Weapon
+	for i := range e.Player.OwnedWeapons {
+		if e.Player.OwnedWeapons[i].ID == weaponID {
+			target = &e.Player.OwnedWeapons[i]
+			break
+		}
+	}
+
+	if target == nil {
+		return fmt.Errorf("senjata tidak ditemukan di inventaris")
+	}
+
+	if target.Durability >= target.MaxDura {
+		return fmt.Errorf("ketahanan %s masih maksimal (%d/%d)", target.Name, target.Durability, target.MaxDura)
+	}
+
+	missing := target.MaxDura - target.Durability
+	goldCost := (missing * 2) / 5
+	if goldCost < 5 {
+		goldCost = 5
+	}
+	stoneCost := (missing * 1) / 5
+	if stoneCost < 2 {
+		stoneCost = 2
+	}
+
+	if e.Village.Treasury < goldCost {
+		return fmt.Errorf("kas emas tidak cukup untuk reparasi (butuh %d Gold, ada %d)", goldCost, e.Village.Treasury)
+	}
+	if e.Village.Stone < stoneCost {
+		return fmt.Errorf("batu tidak cukup untuk reparasi (butuh %d Batu, ada %d)", stoneCost, e.Village.Stone)
+	}
+
+	e.Village.Treasury -= goldCost
+	e.Village.Stone -= stoneCost
+
+	target.Durability = target.MaxDura
+	e.SetAlert(fmt.Sprintf("Berhasil memperbaiki %s (+%d Durabilitas, -%d Gold, -%d Batu)", target.Name, missing, goldCost, stoneCost))
+	return nil
+}
+
+// TrainStat upgrades a character attribute at the Training Grounds
+func (e *Engine) TrainStat(statName string) error {
+	tgLvl := e.Village.Buildings[settlement.BuildingTrainingGround]
+	if tgLvl < 1 {
+		return fmt.Errorf("pusat Latihan belum dibangun")
+	}
+
+	cap := 10 + (tgLvl * 5)
+
+	var currentVal int
+	normalized := strings.ToLower(statName)
+	switch normalized {
+	case "might":
+		currentVal = e.Player.Stats.Might
+	case "agility":
+		currentVal = e.Player.Stats.Agility
+	case "resolve":
+		currentVal = e.Player.Stats.Resolve
+	case "ingenuity":
+		currentVal = e.Player.Stats.Ingenuity
+	default:
+		return fmt.Errorf("nama atribut %s tidak valid", statName)
+	}
+
+	if currentVal >= cap {
+		return fmt.Errorf("stat %s sudah mencapai batas maksimal Pusat Latihan Level %d (Cap: %d)", statName, tgLvl, cap)
+	}
+
+	goldCost := currentVal * 5
+	rationCost := 2 + (currentVal - 10)
+	if rationCost < 2 {
+		rationCost = 2
+	}
+
+	if e.Village.Treasury < goldCost {
+		return fmt.Errorf("kas emas tidak mencukupi (butuh %d Gold, ada %d)", goldCost, e.Village.Treasury)
+	}
+	if e.Village.Rations < rationCost {
+		return fmt.Errorf("lumbung ransum tidak mencukupi (butuh %d Ransum, ada %d)", rationCost, e.Village.Rations)
+	}
+
+	newVal, err := e.Player.UpgradeStat(statName, cap)
+	if err != nil {
+		return err
+	}
+
+	e.Village.Treasury -= goldCost
+	e.Village.Rations -= rationCost
+
+	e.SetAlert(fmt.Sprintf("Latihan berhasil! %s meningkat menjadi %d (-%d Gold, -%d Ransum)", statName, newVal, goldCost, rationCost))
+	return nil
+}
+
 

@@ -6,6 +6,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
+	"github.com/Fahmi-mi/terminal-odyssey/data"
 	"github.com/Fahmi-mi/terminal-odyssey/internal/combat"
 	"github.com/Fahmi-mi/terminal-odyssey/internal/dungeon"
 	"github.com/Fahmi-mi/terminal-odyssey/internal/engine"
@@ -22,6 +23,10 @@ type AppModel struct {
 
 	selectedWorkerIdx int
 	selectedBuildIdx  int
+	selectedRecipeIdx int
+	selectedStatIdx   int
+	blacksmithTab     int
+	selectedWeaponIdx int
 }
 
 // NewAppModel creates a fresh TUI model
@@ -32,6 +37,10 @@ func NewAppModel(eng *engine.Engine) *AppModel {
 		height:            24,
 		selectedWorkerIdx: 0,
 		selectedBuildIdx:  0,
+		selectedRecipeIdx: 0,
+		selectedStatIdx:   0,
+		blacksmithTab:     0,
+		selectedWeaponIdx: 0,
 	}
 }
 
@@ -61,6 +70,10 @@ func (m *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m.updateWorkerAssign(msg)
 		case engine.StateTownBuild:
 			return m.updateTownBuild(msg)
+		case engine.StateBlacksmithCraft:
+			return m.updateBlacksmithCraft(msg)
+		case engine.StateTrainingGrounds:
+			return m.updateTrainingGrounds(msg)
 		case engine.StateDungeonExplore:
 			return m.updateDungeonExplore(msg)
 		case engine.StateCombatTurn:
@@ -94,10 +107,14 @@ func (m *AppModel) updateTownMenu(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if m.Engine.Village.Buildings[settlement.BuildingBlacksmith] < 1 {
 			m.Engine.SetAlert("Bengkel Pandai Besi belum didirikan! Bangun di menu [2] Pembangunan")
 		} else {
-			m.Engine.SetAlert("Bengkel Pandai Besi siap dibuka (Milestone 4)")
+			m.Engine.SwitchState(engine.StateBlacksmithCraft)
 		}
 	case "4":
-		m.Engine.SetAlert("Pusat Latihan Stat Karakter sedang dipersiapkan")
+		if m.Engine.Village.Buildings[settlement.BuildingTrainingGround] < 1 {
+			m.Engine.SetAlert("Pusat Latihan belum didirikan! Bangun di menu [2] Pembangunan")
+		} else {
+			m.Engine.SwitchState(engine.StateTrainingGrounds)
+		}
 	case "5":
 		m.Engine.SetAlert("Kedai Minum belum memiliki rumor baru hari ini")
 	case "6":
@@ -329,6 +346,153 @@ func (m *AppModel) updateCombatTurn(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
+func (m *AppModel) updateBlacksmithCraft(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	recipes, _ := data.LoadRecipeDefs()
+	maxRecipes := len(recipes)
+	owned := m.Engine.Player.OwnedWeapons
+	maxOwned := len(owned)
+
+	switch msg.String() {
+	case "esc":
+		m.Engine.SwitchState(engine.StateTownMenu)
+	case "tab":
+		if m.blacksmithTab == 0 {
+			m.blacksmithTab = 1
+		} else {
+			m.blacksmithTab = 0
+		}
+		m.Engine.ClearAlert()
+	case "1":
+		m.blacksmithTab = 0
+		m.Engine.ClearAlert()
+	case "2":
+		m.blacksmithTab = 1
+		m.Engine.ClearAlert()
+	case "up", "k":
+		if m.blacksmithTab == 0 {
+			if m.selectedRecipeIdx > 0 {
+				m.selectedRecipeIdx--
+			} else if maxRecipes > 0 {
+				m.selectedRecipeIdx = maxRecipes - 1
+			}
+		} else {
+			if m.selectedWeaponIdx > 0 {
+				m.selectedWeaponIdx--
+			} else if maxOwned > 0 {
+				m.selectedWeaponIdx = maxOwned - 1
+			}
+		}
+		m.Engine.ClearAlert()
+	case "down", "j":
+		if m.blacksmithTab == 0 {
+			if m.selectedRecipeIdx < maxRecipes-1 {
+				m.selectedRecipeIdx++
+			} else {
+				m.selectedRecipeIdx = 0
+			}
+		} else {
+			if m.selectedWeaponIdx < maxOwned-1 {
+				m.selectedWeaponIdx++
+			} else {
+				m.selectedWeaponIdx = 0
+			}
+		}
+		m.Engine.ClearAlert()
+	case "enter":
+		if m.blacksmithTab == 0 {
+			if maxRecipes > 0 && m.selectedRecipeIdx < maxRecipes {
+				recipe := recipes[m.selectedRecipeIdx]
+				if err := m.Engine.CraftWeapon(recipe.ID); err != nil {
+					m.Engine.SetAlert(err.Error())
+				}
+			}
+		} else {
+			if maxOwned > 0 && m.selectedWeaponIdx < maxOwned {
+				target := m.Engine.Player.OwnedWeapons[m.selectedWeaponIdx]
+				if err := m.Engine.SwitchWeapon(target.ID); err != nil {
+					m.Engine.SetAlert(err.Error())
+				}
+			}
+		}
+	case "e", "E":
+		if m.blacksmithTab == 0 {
+			if maxRecipes > 0 && m.selectedRecipeIdx < maxRecipes {
+				recipe := recipes[m.selectedRecipeIdx]
+				if m.Engine.Player.OwnsWeapon(recipe.ID) {
+					if err := m.Engine.SwitchWeapon(recipe.ID); err != nil {
+						m.Engine.SetAlert(err.Error())
+					}
+				} else {
+					m.Engine.SetAlert("Senjata ini belum Anda miliki di gudang")
+				}
+			}
+		} else {
+			if maxOwned > 0 && m.selectedWeaponIdx < maxOwned {
+				target := m.Engine.Player.OwnedWeapons[m.selectedWeaponIdx]
+				if err := m.Engine.SwitchWeapon(target.ID); err != nil {
+					m.Engine.SetAlert(err.Error())
+				}
+			}
+		}
+	case "r", "R":
+		if m.blacksmithTab == 0 {
+			if err := m.Engine.RepairEquippedWeapon(); err != nil {
+				m.Engine.SetAlert(err.Error())
+			}
+		} else {
+			if maxOwned > 0 && m.selectedWeaponIdx < maxOwned {
+				target := m.Engine.Player.OwnedWeapons[m.selectedWeaponIdx]
+				if err := m.Engine.RepairWeaponByID(target.ID); err != nil {
+					m.Engine.SetAlert(err.Error())
+				}
+			}
+		}
+	}
+	return m, nil
+}
+
+func (m *AppModel) updateTrainingGrounds(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	statNames := []string{"Might", "Agility", "Resolve", "Ingenuity"}
+	maxStats := len(statNames)
+
+	switch msg.String() {
+	case "esc":
+		m.Engine.SwitchState(engine.StateTownMenu)
+	case "up", "k":
+		if m.selectedStatIdx > 0 {
+			m.selectedStatIdx--
+		} else {
+			m.selectedStatIdx = maxStats - 1
+		}
+		m.Engine.ClearAlert()
+	case "down", "j":
+		if m.selectedStatIdx < maxStats-1 {
+			m.selectedStatIdx++
+		} else {
+			m.selectedStatIdx = 0
+		}
+		m.Engine.ClearAlert()
+	case "1":
+		m.selectedStatIdx = 0
+		m.Engine.ClearAlert()
+	case "2":
+		m.selectedStatIdx = 1
+		m.Engine.ClearAlert()
+	case "3":
+		m.selectedStatIdx = 2
+		m.Engine.ClearAlert()
+	case "4":
+		m.selectedStatIdx = 3
+		m.Engine.ClearAlert()
+	case "enter":
+		stat := statNames[m.selectedStatIdx]
+		if err := m.Engine.TrainStat(stat); err != nil {
+			m.Engine.SetAlert(err.Error())
+		}
+	}
+	return m, nil
+}
+
 func (m *AppModel) updateExpeditionSummary(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
 	case "enter":
@@ -346,6 +510,10 @@ func (m *AppModel) View() string {
 		return views.RenderWorkerView(m.Engine, m.selectedWorkerIdx, m.width)
 	case engine.StateTownBuild:
 		return views.RenderBuildView(m.Engine, m.selectedBuildIdx, m.width)
+	case engine.StateBlacksmithCraft:
+		return views.RenderBlacksmithView(m.Engine, m.selectedRecipeIdx, m.blacksmithTab, m.selectedWeaponIdx, m.width)
+	case engine.StateTrainingGrounds:
+		return views.RenderTrainingView(m.Engine, m.selectedStatIdx, m.width)
 	case engine.StateDungeonExplore:
 		return views.RenderDungeonView(m.Engine, m.width)
 	case engine.StateCombatTurn:
@@ -356,3 +524,4 @@ func (m *AppModel) View() string {
 		return views.RenderTownView(m.Engine, m.width)
 	}
 }
+

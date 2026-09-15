@@ -67,3 +67,14 @@ func TestLoadDungeonData(t *testing.T) {
 	}
 }
 
+func TestLoadRecipeDefs(t *testing.T) {
+	recipes, err := LoadRecipeDefs()
+	if err != nil {
+		t.Fatalf("failed to load recipe defs: %v", err)
+	}
+	if len(recipes) < 4 {
+		t.Fatalf("expected at least 4 recipe defs, got %d", len(recipes))
+	}
+}
+
+
