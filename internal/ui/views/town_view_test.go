@@ -8,6 +8,7 @@ import (
 
 	"github.com/Fahmi-mi/terminal-odyssey/internal/combat"
 	"github.com/Fahmi-mi/terminal-odyssey/internal/engine"
+	"github.com/Fahmi-mi/terminal-odyssey/internal/settlement"
 )
 
 func TestRenderViewsBorderAlignment(t *testing.T) {
@@ -68,6 +69,13 @@ func TestRenderViewsBorderAlignment(t *testing.T) {
 		{"BlacksmithViewCraft", RenderBlacksmithView(eng, 0, 0, 0, 80)},
 		{"BlacksmithViewArmory", RenderBlacksmithView(eng, 0, 1, 0, 80)},
 		{"TrainingView", RenderTrainingView(eng, 0, 80)},
+		{"MarketViewLocal", RenderMarketView(eng, 0, 0, 0, 80)},
+		{"MarketViewCaravanLocked", RenderMarketView(eng, 0, 1, 0, 80)},
+		{"MarketViewCaravanUnlocked", RenderMarketView(func() *engine.Engine {
+			e2 := engine.NewGame("Sang Petualang", "Oakhaven")
+			e2.Village.Buildings[settlement.BuildingCaravanPost] = 2
+			return e2
+		}(), 0, 1, 0, 80)},
 	}
 
 	for _, tc := range testCases {

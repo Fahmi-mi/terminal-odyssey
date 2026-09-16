@@ -77,4 +77,38 @@ func TestLoadRecipeDefs(t *testing.T) {
 	}
 }
 
+func TestLoadCommodityDefs(t *testing.T) {
+	commodities, err := LoadCommodityDefs()
+	if err != nil {
+		t.Fatalf("failed to load commodity defs: %v", err)
+	}
+	if len(commodities) < 8 {
+		t.Fatalf("expected at least 8 commodity defs, got %d", len(commodities))
+	}
+
+	foundLumber := false
+	for _, c := range commodities {
+		if c.ID == "lumber" {
+			foundLumber = true
+			if c.BaseBuyPrice <= c.BaseSellPrice {
+				t.Errorf("expected buy price > sell price, got %d <= %d", c.BaseBuyPrice, c.BaseSellPrice)
+			}
+		}
+	}
+	if !foundLumber {
+		t.Errorf("expected lumber in commodities")
+	}
+}
+
+func TestLoadCaravanRouteDefs(t *testing.T) {
+	routes, err := LoadCaravanRouteDefs()
+	if err != nil {
+		t.Fatalf("failed to load caravan route defs: %v", err)
+	}
+	if len(routes) < 3 {
+		t.Fatalf("expected at least 3 caravan routes, got %d", len(routes))
+	}
+}
+
+
 

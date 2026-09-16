@@ -1,0 +1,47 @@
+[
+  {
+    "id": "riverfall",
+    "name": "Lembah Riverfall",
+    "description": "Kota pelabuhan sungai subur yang memerlukan pasokan kayu konstruksi",
+    "required_level": 1,
+    "base_days": 2,
+    "gold_investment": 50,
+    "cargo_commodity": "lumber",
+    "cargo_amount": 15,
+    "reward_gold_min": 115,
+    "reward_gold_max": 145,
+    "bonus_item_id": "herbal_salve",
+    "bonus_item_amount": 2,
+    "ambush_risk": 10
+  },
+  {
+    "id": "ironpeak",
+    "name": "Benteng Ironpeak",
+    "description": "Kota benteng tambang batu cadas yang kekurangan ransum pangan",
+    "required_level": 2,
+    "base_days": 3,
+    "gold_investment": 100,
+    "cargo_commodity": "rations",
+    "cargo_amount": 15,
+    "reward_gold_min": 230,
+    "reward_gold_max": 290,
+    "bonus_item_id": "iron_ore",
+    "bonus_item_amount": 3,
+    "ambush_risk": 20
+  },
+  {
+    "id": "dunhallow",
+    "name": "Metropolis Dunhallow",
+    "description": "Pusat imperium dagang raya yang rakus akan rempah langka dan relik",
+    "required_level": 3,
+    "base_days": 4,
+    "gold_investment": 200,
+    "cargo_commodity": "spices",
+    "cargo_amount": 5,
+    "reward_gold_min": 480,
+    "reward_gold_max": 590,
+    "bonus_item_id": "caravan_silk",
+    "bonus_item_amount": 2,
+    "ambush_risk": 30
+  }
+]

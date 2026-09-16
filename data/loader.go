@@ -8,7 +8,7 @@ import (
 
 // Files embeds all JSON files in the data directory
 //
-//go:embed scenarios/*.json buildings/*.json events/*.json dungeon/*.json crafting/*.json
+//go:embed scenarios/*.json buildings/*.json events/*.json dungeon/*.json crafting/*.json economy/*.json
 var Files embed.FS
 
 // ScenarioVillage holds initial village configuration
@@ -252,5 +252,63 @@ func LoadRecipeDefs() ([]RecipeDef, error) {
 	}
 	return defs, nil
 }
+
+// CommodityDef holds market commodity trade definitions
+type CommodityDef struct {
+	ID                   string `json:"id"`
+	Name                 string `json:"name"`
+	Category             string `json:"category"`
+	Unit                 string `json:"unit"`
+	Description          string `json:"description"`
+	BaseBuyPrice         int    `json:"base_buy_price"`
+	BaseSellPrice        int    `json:"base_sell_price"`
+	IsSettlementResource bool   `json:"is_settlement_resource"`
+}
+
+// LoadCommodityDefs reads economy/commodities.json
+func LoadCommodityDefs() ([]CommodityDef, error) {
+	bytes, err := Files.ReadFile("economy/commodities.json")
+	if err != nil {
+		return nil, fmt.Errorf("gagal membaca file economy/commodities.json: %w", err)
+	}
+
+	var defs []CommodityDef
+	if err := json.Unmarshal(bytes, &defs); err != nil {
+		return nil, fmt.Errorf("gagal parsing economy/commodities.json: %w", err)
+	}
+	return defs, nil
+}
+
+// CaravanRouteDef holds inter-city caravan expedition route definitions
+type CaravanRouteDef struct {
+	ID              string `json:"id"`
+	Name            string `json:"name"`
+	Description     string `json:"description"`
+	RequiredLevel   int    `json:"required_level"`
+	BaseDays        int    `json:"base_days"`
+	GoldInvestment  int    `json:"gold_investment"`
+	CargoCommodity  string `json:"cargo_commodity"`
+	CargoAmount     int    `json:"cargo_amount"`
+	RewardGoldMin   int    `json:"reward_gold_min"`
+	RewardGoldMax   int    `json:"reward_gold_max"`
+	BonusItemID     string `json:"bonus_item_id"`
+	BonusItemAmount int    `json:"bonus_item_amount"`
+	AmbushRisk      int    `json:"ambush_risk"`
+}
+
+// LoadCaravanRouteDefs reads economy/caravan_routes.json
+func LoadCaravanRouteDefs() ([]CaravanRouteDef, error) {
+	bytes, err := Files.ReadFile("economy/caravan_routes.json")
+	if err != nil {
+		return nil, fmt.Errorf("gagal membaca file economy/caravan_routes.json: %w", err)
+	}
+
+	var defs []CaravanRouteDef
+	if err := json.Unmarshal(bytes, &defs); err != nil {
+		return nil, fmt.Errorf("gagal parsing economy/caravan_routes.json: %w", err)
+	}
+	return defs, nil
+}
+
 
 

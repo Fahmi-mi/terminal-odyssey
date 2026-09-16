@@ -220,7 +220,10 @@ func RenderDungeonView(e *engine.Engine, width int) string {
 	var controlActions []string
 
 	if room.Def.Type == dungeon.RoomTypeExit {
-		controlActions = append(controlActions, fmt.Sprintf("%s Selesai & Bawa Jarahan", styles.KeyBadge.Render("ENTER")))
+		controlActions = append(controlActions,
+			fmt.Sprintf("%s Selesai & Bawa Jarahan", styles.KeyBadge.Render("ENTER")),
+			fmt.Sprintf("%s Mundur", styles.KeyBadge.Render("ESC")),
+		)
 		if exp.Rations > 0 && exp.Player.HP < exp.Player.MaxHP {
 			controlActions = append(controlActions, fmt.Sprintf("%s Makan", styles.KeyBadge.Render("M")))
 		}
