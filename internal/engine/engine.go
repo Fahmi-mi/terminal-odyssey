@@ -7,6 +7,7 @@ import (
 	"github.com/Fahmi-mi/terminal-odyssey/data"
 	"github.com/Fahmi-mi/terminal-odyssey/internal/character"
 	"github.com/Fahmi-mi/terminal-odyssey/internal/dungeon"
+	"github.com/Fahmi-mi/terminal-odyssey/internal/economy"
 	"github.com/Fahmi-mi/terminal-odyssey/internal/settlement"
 )
 
@@ -49,6 +50,9 @@ type Engine struct {
 	Village *settlement.Settlement
 	Player  *character.Player
 
+	Market   *economy.MarketState
+	Caravans *economy.CaravanManager
+
 	ActiveExpedition      *dungeon.Expedition
 	LastExpeditionSummary *ExpeditionSummary
 
@@ -68,6 +72,9 @@ func NewGame(playerName, villageName string) *Engine {
 		initialLogs = sc.InitialLogs
 	}
 
+	market, _ := economy.NewMarketState()
+	caravans, _ := economy.NewCaravanManager()
+
 	e := &Engine{
 		CurrentState:  StateTownMenu,
 		PreviousState: StateTownMenu,
@@ -76,6 +83,8 @@ func NewGame(playerName, villageName string) *Engine {
 		DaysPerSeason: 15, // Every 15 days = 1 season
 		Village:       settlement.NewSettlement(villageName),
 		Player:        character.NewDefaultPlayer(playerName),
+		Market:        market,
+		Caravans:      caravans,
 		DailyLogs:     initialLogs,
 	}
 	return e
@@ -107,6 +116,23 @@ func (e *Engine) PassDay() settlement.DailyResult {
 		simResult.Logs = append([]string{
 			fmt.Sprintf("[*] PERUBAHAN MUSIM: Memasuki %s", newSeason.String()),
 		}, simResult.Logs...)
+	}
+
+	// Update market commodity prices
+	if e.Market != nil {
+		e.Market.UpdateDailyPrices(e.DayCounter, e.CurrentSeason)
+	}
+
+	// Advance active trade caravans
+	if e.Caravans != nil {
+		caravanResults := e.Caravans.AdvanceDay(e.DayCounter, e.Village.Workers.Militia)
+		for _, res := range caravanResults {
+			e.Village.Treasury += res.Expedition.ReturnedGold
+			if res.Expedition.BonusItem != "" && res.Expedition.BonusAmount > 0 {
+				e.Village.AddCommodity(res.Expedition.BonusItem, res.Expedition.BonusAmount)
+			}
+			simResult.Logs = append([]string{res.Log}, simResult.Logs...)
+		}
 	}
 
 	// Update daily logs with the latest results
@@ -427,5 +453,117 @@ func (e *Engine) TrainStat(statName string) error {
 	e.SetAlert(fmt.Sprintf("Latihan berhasil! %s meningkat menjadi %d (-%d Gold, -%d Ransum)", statName, newVal, goldCost, rationCost))
 	return nil
 }
+
+// BuyCommodity purchases a quantity of a commodity from the local market
+func (e *Engine) BuyCommodity(commodityID string, amount int) error {
+	if amount <= 0 {
+		return fmt.Errorf("jumlah beli harus minimal 1 unit")
+	}
+
+	if e.Market == nil {
+		return fmt.Errorf("pasar belum tersedia")
+	}
+
+	item := e.Market.GetItem(commodityID)
+	if item == nil {
+		return fmt.Errorf("komoditas %s tidak ditemukan di katalog pasar", commodityID)
+	}
+
+	unitPrice := e.Market.GetEffectiveBuyPrice(commodityID, e.Player.Stats.Ingenuity)
+	totalCost := unitPrice * amount
+
+	if e.Village.Treasury < totalCost {
+		return fmt.Errorf("kas emas tidak mencukupi (butuh %d Gold, ada %d)", totalCost, e.Village.Treasury)
+	}
+
+	maxL, maxS, maxR := e.Village.StorageCap()
+	switch commodityID {
+	case "lumber":
+		if e.Village.Lumber+amount > maxL {
+			return fmt.Errorf("kapasitas gudang kayu tidak mencukupi (maksimal %d)", maxL)
+		}
+	case "stone":
+		if e.Village.Stone+amount > maxS {
+			return fmt.Errorf("kapasitas gudang batu tidak mencukupi (maksimal %d)", maxS)
+		}
+	case "rations":
+		if e.Village.Rations+amount > maxR {
+			return fmt.Errorf("kapasitas gudang ransum tidak mencukupi (maksimal %d)", maxR)
+		}
+	}
+
+	e.Village.Treasury -= totalCost
+	e.Village.AddCommodity(commodityID, amount)
+
+	e.SetAlert(fmt.Sprintf("Berhasil membeli %d %s (-%d Gold)", amount, item.Def.Name, totalCost))
+	return nil
+}
+
+// SellCommodity sells a quantity of a commodity from village stock to the local market
+func (e *Engine) SellCommodity(commodityID string, amount int) error {
+	if amount <= 0 {
+		return fmt.Errorf("jumlah jual harus minimal 1 unit")
+	}
+
+	if e.Market == nil {
+		return fmt.Errorf("pasar belum tersedia")
+	}
+
+	item := e.Market.GetItem(commodityID)
+	if item == nil {
+		return fmt.Errorf("komoditas %s tidak ditemukan di katalog pasar", commodityID)
+	}
+
+	currentStock := e.Village.GetCommodityStock(commodityID)
+	if currentStock < amount {
+		return fmt.Errorf("stok %s di desa tidak mencukupi (ada %d, butuh %d)", item.Def.Name, currentStock, amount)
+	}
+
+	unitPrice := e.Market.GetEffectiveSellPrice(commodityID, e.Player.Stats.Ingenuity)
+	totalEarned := unitPrice * amount
+
+	if err := e.Village.DeductCommodity(commodityID, amount); err != nil {
+		return err
+	}
+
+	e.Village.Treasury += totalEarned
+	e.SetAlert(fmt.Sprintf("Berhasil menjual %d %s (+%d Gold)", amount, item.Def.Name, totalEarned))
+	return nil
+}
+
+// DispatchCaravan launches a regional trade caravan along the chosen route
+func (e *Engine) DispatchCaravan(routeID string) error {
+	if e.Caravans == nil {
+		return fmt.Errorf("sistem kafilah belum siap")
+	}
+
+	postLvl := e.Village.Buildings[settlement.BuildingCaravanPost]
+	if err := e.Caravans.CanDispatch(routeID, postLvl, e.Village.Treasury, e.Village.Commodities, e.Village.Lumber, e.Village.Rations); err != nil {
+		return err
+	}
+
+	route := e.Caravans.GetRoute(routeID)
+	if route == nil {
+		return fmt.Errorf("rute tidak ditemukan")
+	}
+
+	// Deduct investments and cargo
+	e.Village.Treasury -= route.GoldInvestment
+	if err := e.Village.DeductCommodity(route.CargoCommodity, route.CargoAmount); err != nil {
+		e.Village.Treasury += route.GoldInvestment
+		return err
+	}
+
+	exp, err := e.Caravans.Dispatch(routeID, e.DayCounter, e.CurrentSeason, e.Village.Workers.Militia)
+	if err != nil {
+		e.Village.Treasury += route.GoldInvestment
+		e.Village.AddCommodity(route.CargoCommodity, route.CargoAmount)
+		return err
+	}
+
+	e.SetAlert(fmt.Sprintf("Kafilah dagang menuju %s berhasil diberangkatkan (%d hari perjalanan)", route.Name, exp.TotalDays))
+	return nil
+}
+
 
 

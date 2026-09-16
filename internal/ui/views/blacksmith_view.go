@@ -117,7 +117,7 @@ func RenderBlacksmithView(e *engine.Engine, selectedRecipeIdx int, activeTab int
 
 			cursor := "  "
 			if i == selectedRecipeIdx {
-				cursor = "> "
+				cursor = "▶ "
 			}
 
 			dmgText := fmt.Sprintf("%d-%d ATK", r.MinDamage, r.MaxDamage)
@@ -162,7 +162,7 @@ func RenderBlacksmithView(e *engine.Engine, selectedRecipeIdx int, activeTab int
 
 		// Craftability / ownership status
 		if e.Player.OwnsWeapon(sel.ID) {
-			contentLines = append(contentLines, styles.AlertSuccess.Render("  Status      : Dimiliki di Gudang (Tekan [E] atau [TAB] untuk Pasang)"))
+			contentLines = append(contentLines, styles.AlertSuccess.Render("  Status      : Dimiliki di Gudang (Buka tab [TAB] Gudang untuk Pasang)"))
 		} else if bsLvl < sel.BlacksmithLevel {
 			contentLines = append(contentLines, styles.AlertError.Render(fmt.Sprintf("  Status      : Terkunci (Butuh Bengkel Pandai Besi Level %d)", sel.BlacksmithLevel)))
 		} else if e.Village.Lumber < sel.WoodCost || e.Village.Stone < sel.StoneCost || e.Village.Treasury < sel.GoldCost {
@@ -194,7 +194,7 @@ func RenderBlacksmithView(e *engine.Engine, selectedRecipeIdx int, activeTab int
 		for i, ow := range owned {
 			cursor := "  "
 			if i == selectedWeaponIdx {
-				cursor = "> "
+				cursor = "▶ "
 			}
 
 			isEquipped := ow.ID == e.Player.EquippedWeapon.ID

@@ -132,7 +132,7 @@ func RenderTrainingView(e *engine.Engine, selectedIdx int, width int) string {
 
 		cursor := "  "
 		if i == selectedIdx {
-			cursor = "> "
+			cursor = "▶ "
 		}
 
 		itemText := fmt.Sprintf("%s%-26s : Nilai %2d -> %-2d | Biaya: %2d Gold, %d Ransum",

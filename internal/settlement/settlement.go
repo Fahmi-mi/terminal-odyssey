@@ -1,6 +1,8 @@
 package settlement
 
 import (
+	"fmt"
+
 	"github.com/Fahmi-mi/terminal-odyssey/data"
 )
 
@@ -76,8 +78,9 @@ type Settlement struct {
 	Settlers   int // Total population
 	DefenseVal int
 
-	Workers   Workers
-	Buildings map[string]int // Building Name -> Level
+	Workers     Workers
+	Buildings   map[string]int // Building Name -> Level
+	Commodities map[string]int // Commodity ID -> Quantity
 }
 
 // NewSettlementFromScenario creates a settlement from scenario data
@@ -98,7 +101,8 @@ func NewSettlementFromScenario(v data.ScenarioVillage) *Settlement {
 			Blacksmiths: v.Workers.Blacksmiths,
 			Militia:     v.Workers.Militia,
 		},
-		Buildings: make(map[string]int),
+		Buildings:   make(map[string]int),
+		Commodities: make(map[string]int),
 	}
 
 	for k, val := range v.Buildings {
@@ -137,7 +141,8 @@ func NewSettlement(name string) *Settlement {
 			Blacksmiths: 0,
 			Militia:     1,
 		},
-		Buildings: make(map[string]int),
+		Buildings:   make(map[string]int),
+		Commodities: make(map[string]int),
 	}
 
 	s.Buildings[BuildingTownHall] = 1
@@ -183,3 +188,80 @@ func (s *Settlement) RecalculateDefense() {
 	townHallBonus := s.Buildings[BuildingTownHall] * 10
 	s.DefenseVal = base + militiaBonus + townHallBonus
 }
+
+// GetCommodityStock returns current count of a commodity in village store
+func (s *Settlement) GetCommodityStock(commodityID string) int {
+	switch commodityID {
+	case "lumber":
+		return s.Lumber
+	case "stone":
+		return s.Stone
+	case "rations":
+		return s.Rations
+	default:
+		if s.Commodities == nil {
+			s.Commodities = make(map[string]int)
+		}
+		return s.Commodities[commodityID]
+	}
+}
+
+// AddCommodity adds stock of a commodity to village store
+func (s *Settlement) AddCommodity(commodityID string, amount int) {
+	switch commodityID {
+	case "lumber":
+		s.Lumber += amount
+		maxL, _, _ := s.StorageCap()
+		if s.Lumber > maxL {
+			s.Lumber = maxL
+		}
+	case "stone":
+		s.Stone += amount
+		_, maxS, _ := s.StorageCap()
+		if s.Stone > maxS {
+			s.Stone = maxS
+		}
+	case "rations":
+		s.Rations += amount
+		_, _, maxR := s.StorageCap()
+		if s.Rations > maxR {
+			s.Rations = maxR
+		}
+	default:
+		if s.Commodities == nil {
+			s.Commodities = make(map[string]int)
+		}
+		s.Commodities[commodityID] += amount
+	}
+}
+
+// DeductCommodity removes stock of a commodity from village store
+func (s *Settlement) DeductCommodity(commodityID string, amount int) error {
+	switch commodityID {
+	case "lumber":
+		if s.Lumber < amount {
+			return fmt.Errorf("kayu tidak mencukupi")
+		}
+		s.Lumber -= amount
+	case "stone":
+		if s.Stone < amount {
+			return fmt.Errorf("batu tidak mencukupi")
+		}
+		s.Stone -= amount
+	case "rations":
+		if s.Rations < amount {
+			return fmt.Errorf("ransum tidak mencukupi")
+		}
+		s.Rations -= amount
+	default:
+		if s.Commodities == nil {
+			s.Commodities = make(map[string]int)
+		}
+		if s.Commodities[commodityID] < amount {
+			return fmt.Errorf("komoditas tidak mencukupi")
+		}
+		s.Commodities[commodityID] -= amount
+	}
+	return nil
+}
+

@@ -27,6 +27,10 @@ type AppModel struct {
 	selectedStatIdx   int
 	blacksmithTab     int
 	selectedWeaponIdx int
+
+	selectedMarketIdx int
+	marketTab         int
+	selectedRouteIdx  int
 }
 
 // NewAppModel creates a fresh TUI model
@@ -41,6 +45,9 @@ func NewAppModel(eng *engine.Engine) *AppModel {
 		selectedStatIdx:   0,
 		blacksmithTab:     0,
 		selectedWeaponIdx: 0,
+		selectedMarketIdx: 0,
+		marketTab:         0,
+		selectedRouteIdx:  0,
 	}
 }
 
@@ -74,6 +81,8 @@ func (m *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m.updateBlacksmithCraft(msg)
 		case engine.StateTrainingGrounds:
 			return m.updateTrainingGrounds(msg)
+		case engine.StateMarketTrade:
+			return m.updateMarketTrade(msg)
 		case engine.StateDungeonExplore:
 			return m.updateDungeonExplore(msg)
 		case engine.StateCombatTurn:
@@ -99,10 +108,10 @@ func (m *AppModel) updateTownMenu(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.Engine.PassDay()
 	case "w", "W":
 		m.Engine.SwitchState(engine.StateWorkerAssign)
+	case "1":
+		m.Engine.SwitchState(engine.StateMarketTrade)
 	case "2":
 		m.Engine.SwitchState(engine.StateTownBuild)
-	case "1":
-		m.Engine.SetAlert("Pasar & Perdagangan antar-kota sedang dipersiapkan (Milestone 4)")
 	case "3":
 		if m.Engine.Village.Buildings[settlement.BuildingBlacksmith] < 1 {
 			m.Engine.SetAlert("Bengkel Pandai Besi belum didirikan! Bangun di menu [2] Pembangunan")
@@ -135,14 +144,14 @@ func (m *AppModel) updateWorkerAssign(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
 	case "esc":
 		m.Engine.SwitchState(engine.StateTownMenu)
-	case "up", "k":
+	case "up":
 		if m.selectedWorkerIdx > 0 {
 			m.selectedWorkerIdx--
 		} else {
 			m.selectedWorkerIdx = maxRoles - 1
 		}
 		m.Engine.ClearAlert()
-	case "down", "j":
+	case "down":
 		if m.selectedWorkerIdx < maxRoles-1 {
 			m.selectedWorkerIdx++
 		} else {
@@ -174,14 +183,14 @@ func (m *AppModel) updateTownBuild(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
 	case "esc":
 		m.Engine.SwitchState(engine.StateTownMenu)
-	case "up", "k":
+	case "up":
 		if m.selectedBuildIdx > 0 {
 			m.selectedBuildIdx--
 		} else {
 			m.selectedBuildIdx = maxBuildings - 1
 		}
 		m.Engine.ClearAlert()
-	case "down", "j":
+	case "down":
 		if m.selectedBuildIdx < maxBuildings-1 {
 			m.selectedBuildIdx++
 		} else {
@@ -214,20 +223,42 @@ func (m *AppModel) updateDungeonExplore(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	}
 
 	room := exp.CurrentRoom()
+	choices := exp.NextRoomChoices()
 
-	switch msg.String() {
-	case "esc":
-		// Mundur dari ekspedisi dan bawa pulang jarahan
-		m.Engine.FinishExpedition(true)
-	case "enter":
-		if room.Def.Type == dungeon.RoomTypeExit {
+	if room.Def.Type == dungeon.RoomTypeExit {
+		switch msg.String() {
+		case "enter", "esc":
 			m.Engine.FinishExpedition(true)
-		} else if room.Def.Type == dungeon.RoomTypeCombat && !room.IsResolved {
+		case "m", "M":
+			if exp.Rations > 0 && exp.Player.HP < exp.Player.MaxHP {
+				if _, err := exp.ConsumeRation(); err != nil {
+					m.Engine.SetAlert(err.Error())
+				}
+			}
+		}
+		return m, nil
+	}
+
+	if room.Def.Type == dungeon.RoomTypeCombat && !room.IsResolved {
+		switch msg.String() {
+		case "enter":
 			if exp.ActiveCombat == nil && room.Enemy != nil {
 				exp.ActiveCombat = combat.NewCombatSession(exp.Player, room.Enemy)
 			}
 			m.Engine.SwitchState(engine.StateCombatTurn)
-		} else if !room.IsResolved {
+		case "m", "M":
+			if _, err := exp.ConsumeRation(); err != nil {
+				m.Engine.SetAlert(err.Error())
+			}
+		case "esc":
+			m.Engine.FinishExpedition(true)
+		}
+		return m, nil
+	}
+
+	if !room.IsResolved {
+		switch msg.String() {
+		case "enter":
 			switch room.Def.Type {
 			case dungeon.RoomTypeTreasure:
 				exp.ResolveTreasure()
@@ -239,37 +270,50 @@ func (m *AppModel) updateDungeonExplore(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 					m.Engine.FinishExpedition(false)
 				}
 			}
-		} else {
-			choices := exp.NextRoomChoices()
-			if len(choices) == 1 {
-				if err := exp.AdvanceRoom(); err != nil {
-					m.Engine.SetAlert(err.Error())
-				}
-			} else if len(choices) > 1 {
-				m.Engine.SetAlert("Pilih jalur lorong dengan menekan 1 atau 2")
+		case "m", "M":
+			if _, err := exp.ConsumeRation(); err != nil {
+				m.Engine.SetAlert(err.Error())
 			}
+		case "o", "O":
+			if err := exp.ConsumeTorch(); err != nil {
+				m.Engine.SetAlert(err.Error())
+			}
+		case "esc":
+			m.Engine.FinishExpedition(true)
 		}
-	case "1":
-		if room.IsResolved {
-			choices := exp.NextRoomChoices()
-			if len(choices) >= 1 {
-				if err := exp.AdvanceToRoom(choices[0].GraphIdx); err != nil {
-					m.Engine.SetAlert(err.Error())
-				}
+		return m, nil
+	}
+
+	// Room is resolved
+	if len(choices) >= 2 {
+		switch msg.String() {
+		case "1":
+			if err := exp.AdvanceToRoom(choices[0].GraphIdx); err != nil {
+				m.Engine.SetAlert(err.Error())
 			}
-		} else {
-			m.Engine.SetAlert("Selesaikan peristiwa di ruangan ini terlebih dahulu")
+		case "2":
+			if err := exp.AdvanceToRoom(choices[1].GraphIdx); err != nil {
+				m.Engine.SetAlert(err.Error())
+			}
+		case "m", "M":
+			if _, err := exp.ConsumeRation(); err != nil {
+				m.Engine.SetAlert(err.Error())
+			}
+		case "o", "O":
+			if err := exp.ConsumeTorch(); err != nil {
+				m.Engine.SetAlert(err.Error())
+			}
+		case "esc":
+			m.Engine.FinishExpedition(true)
 		}
-	case "2":
-		if room.IsResolved {
-			choices := exp.NextRoomChoices()
-			if len(choices) >= 2 {
-				if err := exp.AdvanceToRoom(choices[1].GraphIdx); err != nil {
-					m.Engine.SetAlert(err.Error())
-				}
-			}
-		} else {
-			m.Engine.SetAlert("Selesaikan peristiwa di ruangan ini terlebih dahulu")
+		return m, nil
+	}
+
+	// Resolved with single choice
+	switch msg.String() {
+	case "enter":
+		if err := exp.AdvanceRoom(); err != nil {
+			m.Engine.SetAlert(err.Error())
 		}
 	case "m", "M":
 		if _, err := exp.ConsumeRation(); err != nil {
@@ -279,6 +323,8 @@ func (m *AppModel) updateDungeonExplore(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if err := exp.ConsumeTorch(); err != nil {
 			m.Engine.SetAlert(err.Error())
 		}
+	case "esc":
+		m.Engine.FinishExpedition(true)
 	}
 	return m, nil
 }
@@ -368,7 +414,7 @@ func (m *AppModel) updateBlacksmithCraft(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "2":
 		m.blacksmithTab = 1
 		m.Engine.ClearAlert()
-	case "up", "k":
+	case "up":
 		if m.blacksmithTab == 0 {
 			if m.selectedRecipeIdx > 0 {
 				m.selectedRecipeIdx--
@@ -383,7 +429,7 @@ func (m *AppModel) updateBlacksmithCraft(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			}
 		}
 		m.Engine.ClearAlert()
-	case "down", "j":
+	case "down":
 		if m.blacksmithTab == 0 {
 			if m.selectedRecipeIdx < maxRecipes-1 {
 				m.selectedRecipeIdx++
@@ -402,28 +448,14 @@ func (m *AppModel) updateBlacksmithCraft(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if m.blacksmithTab == 0 {
 			if maxRecipes > 0 && m.selectedRecipeIdx < maxRecipes {
 				recipe := recipes[m.selectedRecipeIdx]
-				if err := m.Engine.CraftWeapon(recipe.ID); err != nil {
-					m.Engine.SetAlert(err.Error())
-				}
-			}
-		} else {
-			if maxOwned > 0 && m.selectedWeaponIdx < maxOwned {
-				target := m.Engine.Player.OwnedWeapons[m.selectedWeaponIdx]
-				if err := m.Engine.SwitchWeapon(target.ID); err != nil {
-					m.Engine.SetAlert(err.Error())
-				}
-			}
-		}
-	case "e", "E":
-		if m.blacksmithTab == 0 {
-			if maxRecipes > 0 && m.selectedRecipeIdx < maxRecipes {
-				recipe := recipes[m.selectedRecipeIdx]
 				if m.Engine.Player.OwnsWeapon(recipe.ID) {
 					if err := m.Engine.SwitchWeapon(recipe.ID); err != nil {
 						m.Engine.SetAlert(err.Error())
 					}
 				} else {
-					m.Engine.SetAlert("Senjata ini belum Anda miliki di gudang")
+					if err := m.Engine.CraftWeapon(recipe.ID); err != nil {
+						m.Engine.SetAlert(err.Error())
+					}
 				}
 			}
 		} else {
@@ -458,31 +490,19 @@ func (m *AppModel) updateTrainingGrounds(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
 	case "esc":
 		m.Engine.SwitchState(engine.StateTownMenu)
-	case "up", "k":
+	case "up":
 		if m.selectedStatIdx > 0 {
 			m.selectedStatIdx--
 		} else {
 			m.selectedStatIdx = maxStats - 1
 		}
 		m.Engine.ClearAlert()
-	case "down", "j":
+	case "down":
 		if m.selectedStatIdx < maxStats-1 {
 			m.selectedStatIdx++
 		} else {
 			m.selectedStatIdx = 0
 		}
-		m.Engine.ClearAlert()
-	case "1":
-		m.selectedStatIdx = 0
-		m.Engine.ClearAlert()
-	case "2":
-		m.selectedStatIdx = 1
-		m.Engine.ClearAlert()
-	case "3":
-		m.selectedStatIdx = 2
-		m.Engine.ClearAlert()
-	case "4":
-		m.selectedStatIdx = 3
 		m.Engine.ClearAlert()
 	case "enter":
 		stat := statNames[m.selectedStatIdx]
@@ -490,6 +510,106 @@ func (m *AppModel) updateTrainingGrounds(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.Engine.SetAlert(err.Error())
 		}
 	}
+	return m, nil
+}
+
+func (m *AppModel) updateMarketTrade(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	if m.Engine.Market == nil {
+		m.Engine.SwitchState(engine.StateTownMenu)
+		return m, nil
+	}
+
+	postLvl := m.Engine.Village.Buildings[settlement.BuildingCaravanPost]
+
+	if m.marketTab == 0 {
+		maxItems := len(m.Engine.Market.Items)
+		switch msg.String() {
+		case "esc":
+			m.Engine.SwitchState(engine.StateTownMenu)
+		case "tab", "2":
+			m.marketTab = 1
+			m.Engine.ClearAlert()
+		case "1":
+			m.marketTab = 0
+			m.Engine.ClearAlert()
+		case "up":
+			if m.selectedMarketIdx > 0 {
+				m.selectedMarketIdx--
+			} else if maxItems > 0 {
+				m.selectedMarketIdx = maxItems - 1
+			}
+			m.Engine.ClearAlert()
+		case "down":
+			if m.selectedMarketIdx < maxItems-1 {
+				m.selectedMarketIdx++
+			} else {
+				m.selectedMarketIdx = 0
+			}
+			m.Engine.ClearAlert()
+		case "b", "B":
+			if maxItems > 0 && m.selectedMarketIdx < maxItems {
+				item := m.Engine.Market.Items[m.selectedMarketIdx]
+				if err := m.Engine.BuyCommodity(item.Def.ID, 1); err != nil {
+					m.Engine.SetAlert(err.Error())
+				}
+			}
+		case "s", "S":
+			if maxItems > 0 && m.selectedMarketIdx < maxItems {
+				item := m.Engine.Market.Items[m.selectedMarketIdx]
+				if err := m.Engine.SellCommodity(item.Def.ID, 1); err != nil {
+					m.Engine.SetAlert(err.Error())
+				}
+			}
+		}
+	} else {
+		if postLvl < 1 {
+			switch msg.String() {
+			case "esc":
+				m.Engine.SwitchState(engine.StateTownMenu)
+			case "tab", "1":
+				m.marketTab = 0
+				m.Engine.ClearAlert()
+			case "2":
+				m.marketTab = 1
+				m.Engine.ClearAlert()
+			}
+			return m, nil
+		}
+
+		maxRoutes := len(m.Engine.Caravans.Routes)
+		switch msg.String() {
+		case "esc":
+			m.Engine.SwitchState(engine.StateTownMenu)
+		case "tab", "1":
+			m.marketTab = 0
+			m.Engine.ClearAlert()
+		case "2":
+			m.marketTab = 1
+			m.Engine.ClearAlert()
+		case "up":
+			if m.selectedRouteIdx > 0 {
+				m.selectedRouteIdx--
+			} else if maxRoutes > 0 {
+				m.selectedRouteIdx = maxRoutes - 1
+			}
+			m.Engine.ClearAlert()
+		case "down":
+			if m.selectedRouteIdx < maxRoutes-1 {
+				m.selectedRouteIdx++
+			} else {
+				m.selectedRouteIdx = 0
+			}
+			m.Engine.ClearAlert()
+		case "enter":
+			if maxRoutes > 0 && m.selectedRouteIdx < maxRoutes {
+				route := m.Engine.Caravans.Routes[m.selectedRouteIdx]
+				if err := m.Engine.DispatchCaravan(route.ID); err != nil {
+					m.Engine.SetAlert(err.Error())
+				}
+			}
+		}
+	}
+
 	return m, nil
 }
 
@@ -514,6 +634,8 @@ func (m *AppModel) View() string {
 		return views.RenderBlacksmithView(m.Engine, m.selectedRecipeIdx, m.blacksmithTab, m.selectedWeaponIdx, m.width)
 	case engine.StateTrainingGrounds:
 		return views.RenderTrainingView(m.Engine, m.selectedStatIdx, m.width)
+	case engine.StateMarketTrade:
+		return views.RenderMarketView(m.Engine, m.selectedMarketIdx, m.marketTab, m.selectedRouteIdx, m.width)
 	case engine.StateDungeonExplore:
 		return views.RenderDungeonView(m.Engine, m.width)
 	case engine.StateCombatTurn:
@@ -524,4 +646,5 @@ func (m *AppModel) View() string {
 		return views.RenderTownView(m.Engine, m.width)
 	}
 }
+
 

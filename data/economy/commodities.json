@@ -1,0 +1,82 @@
+[
+  {
+    "id": "lumber",
+    "name": "Kayu Bangunan",
+    "category": "Material",
+    "unit": "Balok",
+    "description": "Bahan baku pertukangan dan bahan bakar pemanas pemukiman",
+    "base_buy_price": 8,
+    "base_sell_price": 5,
+    "is_settlement_resource": true
+  },
+  {
+    "id": "stone",
+    "name": "Batu Tambang",
+    "category": "Material",
+    "unit": "Bongkah",
+    "description": "Batu keras untuk fondasi benteng dan bengkel tempa",
+    "base_buy_price": 12,
+    "base_sell_price": 8,
+    "is_settlement_resource": true
+  },
+  {
+    "id": "rations",
+    "name": "Ransum Kering",
+    "category": "Logistik",
+    "unit": "Porsi",
+    "description": "Perbekalan pangan tahan lama untuk ekspedisi dan warga",
+    "base_buy_price": 6,
+    "base_sell_price": 4,
+    "is_settlement_resource": true
+  },
+  {
+    "id": "iron_ore",
+    "name": "Bijih Besi Murni",
+    "category": "Mineral",
+    "unit": "Biji",
+    "description": "Bahan baku logam mentah untuk kebutuhan penempaan senjata",
+    "base_buy_price": 22,
+    "base_sell_price": 15,
+    "is_settlement_resource": false
+  },
+  {
+    "id": "herbal_salve",
+    "name": "Salep Herbal",
+    "category": "Farmasi",
+    "unit": "Botol",
+    "description": "Olahan tanaman obat liar peredam luka dan racun",
+    "base_buy_price": 28,
+    "base_sell_price": 19,
+    "is_settlement_resource": false
+  },
+  {
+    "id": "spices",
+    "name": "Rempah Lembah",
+    "category": "Mewah",
+    "unit": "Kantung",
+    "description": "Komoditas aromatik bernilai tinggi di kota-kota utara",
+    "base_buy_price": 48,
+    "base_sell_price": 34,
+    "is_settlement_resource": false
+  },
+  {
+    "id": "caravan_silk",
+    "name": "Sutra Musafir",
+    "category": "Mewah",
+    "unit": "Gulung",
+    "description": "Kain tenun mewah impor yang sangat diminati saudagar kaya",
+    "base_buy_price": 65,
+    "base_sell_price": 46,
+    "is_settlement_resource": false
+  },
+  {
+    "id": "ancient_relic",
+    "name": "Relik Kuno",
+    "category": "Relik",
+    "unit": "Artefak",
+    "description": "Benda purbakala reruntuhan yang diburu kolektor bangsawan",
+    "base_buy_price": 125,
+    "base_sell_price": 95,
+    "is_settlement_resource": false
+  }
+]

@@ -214,5 +214,95 @@ func TestEngineTrainStat(t *testing.T) {
 	}
 }
 
+func TestEngineMarketTradeAndCaravans(t *testing.T) {
+	eng := NewGame("MarketTester", "Oakhaven")
+	eng.Village.Treasury = 500
+	eng.Village.Lumber = 20
+	eng.Village.Stone = 20
+	eng.Village.Rations = 20
+
+	// 1. Buy Commodity
+	initialTreasury := eng.Village.Treasury
+	initialLumber := eng.Village.Lumber
+	buyPrice := eng.Market.GetEffectiveBuyPrice("lumber", eng.Player.Stats.Ingenuity)
+
+	errBuy := eng.BuyCommodity("lumber", 5)
+	if errBuy != nil {
+		t.Fatalf("unexpected buy error: %v", errBuy)
+	}
+	if eng.Village.Lumber != initialLumber+5 {
+		t.Errorf("expected %d lumber, got %d", initialLumber+5, eng.Village.Lumber)
+	}
+	if eng.Village.Treasury != initialTreasury-(buyPrice*5) {
+		t.Errorf("expected treasury %d, got %d", initialTreasury-(buyPrice*5), eng.Village.Treasury)
+	}
+
+	// Test storage cap overflow
+	maxL, _, _ := eng.Village.StorageCap()
+	eng.Village.Lumber = maxL
+	errOverflow := eng.BuyCommodity("lumber", 1)
+	if errOverflow == nil {
+		t.Errorf("expected error buying beyond storage capacity")
+	}
+
+	// 2. Sell Commodity
+	initialStone := eng.Village.Stone
+	initialTreasury = eng.Village.Treasury
+	sellPrice := eng.Market.GetEffectiveSellPrice("stone", eng.Player.Stats.Ingenuity)
+
+	errSell := eng.SellCommodity("stone", 4)
+	if errSell != nil {
+		t.Fatalf("unexpected sell error: %v", errSell)
+	}
+	if eng.Village.Stone != initialStone-4 {
+		t.Errorf("expected %d stone, got %d", initialStone-4, eng.Village.Stone)
+	}
+	if eng.Village.Treasury != initialTreasury+(sellPrice*4) {
+		t.Errorf("expected treasury %d, got %d", initialTreasury+(sellPrice*4), eng.Village.Treasury)
+	}
+
+	// Test selling with insufficient stock
+	errNoStock := eng.SellCommodity("spices", 10)
+	if errNoStock == nil {
+		t.Errorf("expected error selling non-existent commodity")
+	}
+
+	// 3. Caravan Dispatch
+	errNoPost := eng.DispatchCaravan("riverfall")
+	if errNoPost == nil {
+		t.Errorf("expected error dispatching caravan without Pos Kafilah building")
+	}
+
+	// Build Pos Kafilah Lvl 1
+	eng.Village.Buildings[settlement.BuildingCaravanPost] = 1
+	eng.Village.Lumber = 50
+	eng.Village.Treasury = 300
+
+	errDispatch := eng.DispatchCaravan("riverfall")
+	if errDispatch != nil {
+		t.Fatalf("unexpected caravan dispatch error: %v", errDispatch)
+	}
+
+	if len(eng.Caravans.ActiveCaravans) != 1 {
+		t.Fatalf("expected 1 active caravan, got %d", len(eng.Caravans.ActiveCaravans))
+	}
+
+	// Pass days until caravan completes (2 days)
+	eng.PassDay()
+	if len(eng.Caravans.ActiveCaravans) != 1 {
+		t.Errorf("expected caravan still in flight on day 1")
+	}
+
+	treasuryBeforeReturn := eng.Village.Treasury
+	eng.PassDay()
+	if len(eng.Caravans.ActiveCaravans) != 0 {
+		t.Errorf("expected caravan to have returned on day 2")
+	}
+	if eng.Village.Treasury <= treasuryBeforeReturn {
+		t.Errorf("expected treasury to increase upon caravan return")
+	}
+}
+
+
 
 
