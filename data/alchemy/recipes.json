@@ -1,0 +1,66 @@
+[
+  {
+    "id": "salep_pemulih",
+    "name": "Salep Pemulih Herbal",
+    "description": "Olahan herba liar dan ransum bergizi peredam luka fisik (+35 HP)",
+    "apothecary_level": 1,
+    "gold_cost": 10,
+    "ingredients": {
+      "herbal_salve": 1,
+      "rations": 1
+    },
+    "effect_type": "heal_hp",
+    "effect_value": 35
+  },
+  {
+    "id": "minyak_obor",
+    "name": "Minyak Obor Murni",
+    "description": "Minyak kayu damar murni penyuplai bahan bakar obor (+35% Penerangan)",
+    "apothecary_level": 1,
+    "gold_cost": 8,
+    "ingredients": {
+      "lumber": 2
+    },
+    "effect_type": "refill_torch",
+    "effect_value": 35
+  },
+  {
+    "id": "penawar_racun",
+    "name": "Penawar Racun Alami",
+    "description": "Ramuan mineral penetral racun berbisa dan luka pendarahan (+15 HP)",
+    "apothecary_level": 2,
+    "gold_cost": 15,
+    "ingredients": {
+      "herbal_salve": 1,
+      "stone": 1
+    },
+    "effect_type": "cure_debuff",
+    "effect_value": 15
+  },
+  {
+    "id": "tonik_penenang",
+    "name": "Tonik Penenang Jiwa",
+    "description": "Seduhan rempah aromatik pereda trauma batin dan histeria (+25 Sanity)",
+    "apothecary_level": 2,
+    "gold_cost": 25,
+    "ingredients": {
+      "spices": 1,
+      "herbal_salve": 1
+    },
+    "effect_type": "restore_sanity",
+    "effect_value": 25
+  },
+  {
+    "id": "eliksir_kekuatan",
+    "name": "Eliksir Kekuatan Tempur",
+    "description": "Konsentrat mineral besi penguat otot tangan petualang (+8 Attack)",
+    "apothecary_level": 3,
+    "gold_cost": 40,
+    "ingredients": {
+      "iron_ore": 1,
+      "spices": 1
+    },
+    "effect_type": "buff_atk",
+    "effect_value": 8
+  }
+]

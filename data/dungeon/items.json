@@ -1,0 +1,42 @@
+[
+  {
+    "id": "torch",
+    "name": "Obor Minyak",
+    "description": "Obor berbahan damar hutan yang memulihkan +30% nyala penerangan",
+    "type": "consumable",
+    "value": 10,
+    "effect_value": 30
+  },
+  {
+    "id": "ration",
+    "name": "Ransum Kering",
+    "description": "Dendeng daging dan roti gandum padat yang memulihkan 25 poin HP",
+    "type": "consumable",
+    "value": 5,
+    "effect_value": 25
+  },
+  {
+    "id": "iron_scrap",
+    "name": "Serpihan Besi Kuno",
+    "description": "Potongan logam sisa pelindung prajurit kuno untuk bahan tempa",
+    "type": "material",
+    "value": 15,
+    "effect_value": 0
+  },
+  {
+    "id": "ancient_gem",
+    "name": "Batu Permata Purba",
+    "description": "Batu mirah delima berkilau yang bernilai tinggi saat disetor ke kas desa",
+    "type": "treasure",
+    "value": 50,
+    "effect_value": 0
+  },
+  {
+    "id": "relic_pendant",
+    "name": "Liontin Bangsawan",
+    "description": "Perhiasan perak berukir lambang dinasti lama bernilai 35 koin emas",
+    "type": "treasure",
+    "value": 35,
+    "effect_value": 0
+  }
+]

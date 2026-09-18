@@ -1,0 +1,502 @@
+package engine
+
+import (
+	"testing"
+
+	"github.com/Fahmi-mi/terminal-odyssey/internal/character"
+	"github.com/Fahmi-mi/terminal-odyssey/internal/settlement"
+)
+
+func TestEngineInitialState(t *testing.T) {
+	eng := NewGame("Petualang", "Oakhaven")
+
+	if eng.DayCounter != 1 {
+		t.Fatalf("expected day 1, got %d", eng.DayCounter)
+	}
+	if eng.CurrentSeason != settlement.SeasonSpring {
+		t.Fatalf("expected Spring, got %v", eng.CurrentSeason)
+	}
+	if eng.CurrentState != StateTownMenu {
+		t.Fatalf("expected StateTownMenu, got %v", eng.CurrentState)
+	}
+}
+
+func TestEnginePassDayAndSeasonTransition(t *testing.T) {
+	eng := NewGame("Petualang", "Oakhaven")
+	eng.DaysPerSeason = 5 // Fast seasons for test
+
+	// Pass 4 days -> still Spring
+	for i := 0; i < 4; i++ {
+		eng.PassDay()
+	}
+	if eng.CurrentSeason != settlement.SeasonSpring {
+		t.Fatalf("expected Spring on day 5, got %v", eng.CurrentSeason)
+	}
+
+	// 5th day pass -> day 6 -> transition to Summer
+	result := eng.PassDay()
+	if !result.SeasonChanged {
+		t.Fatalf("expected season change on day 6")
+	}
+	if eng.CurrentSeason != settlement.SeasonSummer {
+		t.Fatalf("expected Summer on day 6, got %v", eng.CurrentSeason)
+	}
+}
+
+func TestEngineStateSwitch(t *testing.T) {
+	eng := NewGame("Petualang", "Oakhaven")
+	eng.SetAlert("Test Alert")
+
+	eng.SwitchState(StateWorkerAssign)
+	if eng.CurrentState != StateWorkerAssign {
+		t.Fatalf("expected StateWorkerAssign, got %v", eng.CurrentState)
+	}
+	if eng.PreviousState != StateTownMenu {
+		t.Fatalf("expected PreviousState StateTownMenu, got %v", eng.PreviousState)
+	}
+	if eng.StatusAlert != "" {
+		t.Fatalf("expected alert to be cleared on state switch")
+	}
+}
+
+func TestEngineExpeditionFlow(t *testing.T) {
+	eng := NewGame("Petualang", "Oakhaven")
+	eng.Village.Rations = 10
+	initialTreasury := eng.Village.Treasury
+
+	// Test insufficient rations error
+	errTooMany := eng.StartExpedition(20)
+	if errTooMany == nil {
+		t.Errorf("expected error when taking more rations than village has")
+	}
+
+	// Test valid expedition start
+	errStart := eng.StartExpedition(3)
+	if errStart != nil {
+		t.Fatalf("unexpected start expedition error: %v", errStart)
+	}
+	if eng.Village.Rations != 7 {
+		t.Errorf("expected 7 village rations remaining, got %d", eng.Village.Rations)
+	}
+	if eng.ActiveExpedition == nil {
+		t.Fatalf("expected ActiveExpedition to be initialized")
+	}
+
+	// Simulate finding loot and evacuating
+	eng.ActiveExpedition.GoldFound = 50
+	eng.ActiveExpedition.LumberFound = 20
+	eng.FinishExpedition(true)
+
+	if eng.CurrentState != StateExpeditionSummary {
+		t.Errorf("expected StateExpeditionSummary, got %v", eng.CurrentState)
+	}
+	if eng.Village.Treasury != initialTreasury+50 {
+		t.Errorf("expected treasury %d, got %d", initialTreasury+50, eng.Village.Treasury)
+	}
+
+	// Test defeat flow
+	eng.Village.Rations = 5
+	initialDay := eng.DayCounter
+	_ = eng.StartExpedition(2)
+	eng.ActiveExpedition.GoldFound = 100
+	eng.ActiveExpedition.IsDefeated = true
+	eng.FinishExpedition(false)
+
+	if eng.DayCounter != initialDay+1 {
+		t.Errorf("expected day to advance after medical rescue, got %d", eng.DayCounter)
+	}
+	if eng.Player.HP != 25 {
+		t.Errorf("expected player HP 25 after rescue, got %d", eng.Player.HP)
+	}
+
+	// Test PassDay recovers +20 HP
+	eng.Village.Rations = 20
+	eng.PassDay()
+	if eng.Player.HP != 45 {
+		t.Errorf("expected player HP 45 after daily rest (25+20), got %d", eng.Player.HP)
+	}
+}
+
+func TestEngineBlacksmithCraftAndRepair(t *testing.T) {
+	eng := NewGame("CraftTester", "Oakhaven")
+
+	// Error if Blacksmith not built
+	errNoBS := eng.CraftWeapon("iron_broadsword")
+	if errNoBS == nil {
+		t.Errorf("expected error crafting weapon without Blacksmith")
+	}
+
+	// Build Blacksmith Lvl 1
+	eng.Village.Buildings[settlement.BuildingBlacksmith] = 1
+	eng.Village.Lumber = 100
+	eng.Village.Stone = 100
+	eng.Village.Treasury = 200
+
+	// Craft iron_broadsword
+	errCraft := eng.CraftWeapon("iron_broadsword")
+	if errCraft != nil {
+		t.Fatalf("unexpected craft error: %v", errCraft)
+	}
+	if eng.Player.EquippedWeapon.ID != "iron_broadsword" {
+		t.Errorf("expected equipped weapon iron_broadsword, got %s", eng.Player.EquippedWeapon.ID)
+	}
+	if eng.Village.Lumber != 90 || eng.Village.Stone != 85 || eng.Village.Treasury != 160 {
+		t.Errorf("resources not deducted correctly after crafting")
+	}
+
+	// Damage weapon and test repair
+	eng.Player.EquippedWeapon.Durability = 20
+	errRepair := eng.RepairEquippedWeapon()
+	if errRepair != nil {
+		t.Fatalf("unexpected repair error: %v", errRepair)
+	}
+	if eng.Player.EquippedWeapon.Durability != eng.Player.EquippedWeapon.MaxDura {
+		t.Errorf("expected durability to be fully restored, got %d", eng.Player.EquippedWeapon.Durability)
+	}
+
+	// Repair when already full
+	errFullRepair := eng.RepairEquippedWeapon()
+	if errFullRepair == nil {
+		t.Errorf("expected error repairing fully intact weapon")
+	}
+
+	// Switch back to starter weapon (rusty_sword)
+	errSwitch := eng.SwitchWeapon("rusty_sword")
+	if errSwitch != nil {
+		t.Fatalf("unexpected error switching weapon: %v", errSwitch)
+	}
+	if eng.Player.EquippedWeapon.ID != "rusty_sword" {
+		t.Errorf("expected equipped weapon rusty_sword, got %s", eng.Player.EquippedWeapon.ID)
+	}
+
+	// Test repairing unequipped weapon in storage
+	for i := range eng.Player.OwnedWeapons {
+		if eng.Player.OwnedWeapons[i].ID == "iron_broadsword" {
+			eng.Player.OwnedWeapons[i].Durability = 30
+		}
+	}
+	errRepairStored := eng.RepairWeaponByID("iron_broadsword")
+	if errRepairStored != nil {
+		t.Fatalf("unexpected error repairing stored weapon: %v", errRepairStored)
+	}
+}
+
+func TestEngineTrainStat(t *testing.T) {
+	eng := NewGame("TrainTester", "Oakhaven")
+
+	// Error if Training Grounds not built
+	errNoTG := eng.TrainStat("Might")
+	if errNoTG == nil {
+		t.Errorf("expected error training stat without Training Grounds")
+	}
+
+	// Build Training Grounds Lvl 1
+	eng.Village.Buildings[settlement.BuildingTrainingGround] = 1
+	eng.Village.Treasury = 300
+	eng.Village.Rations = 50
+
+	initialMight := eng.Player.Stats.Might
+	errTrain := eng.TrainStat("Might")
+	if errTrain != nil {
+		t.Fatalf("unexpected train error: %v", errTrain)
+	}
+	if eng.Player.Stats.Might != initialMight+1 {
+		t.Errorf("expected might %d, got %d", initialMight+1, eng.Player.Stats.Might)
+	}
+
+	// Train Resolve and verify MaxHP scales
+	initialHP := eng.Player.MaxHP
+	errTrainRes := eng.TrainStat("Resolve")
+	if errTrainRes != nil {
+		t.Fatalf("unexpected train resolve error: %v", errTrainRes)
+	}
+	if eng.Player.MaxHP != initialHP+5 {
+		t.Errorf("expected MaxHP %d, got %d", initialHP+5, eng.Player.MaxHP)
+	}
+}
+
+func TestEngineMarketTradeAndCaravans(t *testing.T) {
+	eng := NewGame("MarketTester", "Oakhaven")
+	eng.Village.Treasury = 500
+	eng.Village.Lumber = 20
+	eng.Village.Stone = 20
+	eng.Village.Rations = 20
+
+	// 1. Buy Commodity
+	initialTreasury := eng.Village.Treasury
+	initialLumber := eng.Village.Lumber
+	buyPrice := eng.Market.GetEffectiveBuyPrice("lumber", eng.Player.Stats.Ingenuity)
+
+	errBuy := eng.BuyCommodity("lumber", 5)
+	if errBuy != nil {
+		t.Fatalf("unexpected buy error: %v", errBuy)
+	}
+	if eng.Village.Lumber != initialLumber+5 {
+		t.Errorf("expected %d lumber, got %d", initialLumber+5, eng.Village.Lumber)
+	}
+	if eng.Village.Treasury != initialTreasury-(buyPrice*5) {
+		t.Errorf("expected treasury %d, got %d", initialTreasury-(buyPrice*5), eng.Village.Treasury)
+	}
+
+	// Test storage cap overflow
+	maxL, _, _ := eng.Village.StorageCap()
+	eng.Village.Lumber = maxL
+	errOverflow := eng.BuyCommodity("lumber", 1)
+	if errOverflow == nil {
+		t.Errorf("expected error buying beyond storage capacity")
+	}
+
+	// 2. Sell Commodity
+	initialStone := eng.Village.Stone
+	initialTreasury = eng.Village.Treasury
+	sellPrice := eng.Market.GetEffectiveSellPrice("stone", eng.Player.Stats.Ingenuity)
+
+	errSell := eng.SellCommodity("stone", 4)
+	if errSell != nil {
+		t.Fatalf("unexpected sell error: %v", errSell)
+	}
+	if eng.Village.Stone != initialStone-4 {
+		t.Errorf("expected %d stone, got %d", initialStone-4, eng.Village.Stone)
+	}
+	if eng.Village.Treasury != initialTreasury+(sellPrice*4) {
+		t.Errorf("expected treasury %d, got %d", initialTreasury+(sellPrice*4), eng.Village.Treasury)
+	}
+
+	// Test selling with insufficient stock
+	errNoStock := eng.SellCommodity("spices", 10)
+	if errNoStock == nil {
+		t.Errorf("expected error selling non-existent commodity")
+	}
+
+	// 3. Caravan Dispatch
+	errNoPost := eng.DispatchCaravan("riverfall")
+	if errNoPost == nil {
+		t.Errorf("expected error dispatching caravan without Pos Kafilah building")
+	}
+
+	// Build Pos Kafilah Lvl 1
+	eng.Village.Buildings[settlement.BuildingCaravanPost] = 1
+	eng.Village.Lumber = 50
+	eng.Village.Treasury = 300
+
+	errDispatch := eng.DispatchCaravan("riverfall")
+	if errDispatch != nil {
+		t.Fatalf("unexpected caravan dispatch error: %v", errDispatch)
+	}
+
+	if len(eng.Caravans.ActiveCaravans) != 1 {
+		t.Fatalf("expected 1 active caravan, got %d", len(eng.Caravans.ActiveCaravans))
+	}
+
+	// Pass days until caravan completes (2 days)
+	eng.PassDay()
+	if len(eng.Caravans.ActiveCaravans) != 1 {
+		t.Errorf("expected caravan still in flight on day 1")
+	}
+
+	treasuryBeforeReturn := eng.Village.Treasury
+	eng.PassDay()
+	if len(eng.Caravans.ActiveCaravans) != 0 {
+		t.Errorf("expected caravan to have returned on day 2")
+	}
+	if eng.Village.Treasury <= treasuryBeforeReturn {
+		t.Errorf("expected treasury to increase upon caravan return")
+	}
+}
+
+func TestEngineAlchemyAndBrewing(t *testing.T) {
+	eng := NewGame("Alchemist", "Oakhaven")
+
+	// Building not present
+	errNoBuilding := eng.BrewPotion("salep_pemulih")
+	if errNoBuilding == nil {
+		t.Errorf("expected error brewing without alchemy lab")
+	}
+
+	// Build alchemy lab level 1
+	eng.Village.Buildings[settlement.BuildingApothecary] = 1
+	eng.Village.Treasury = 100
+	eng.Village.AddCommodity("herbal_salve", 5)
+
+	errBrew := eng.BrewPotion("salep_pemulih")
+	if errBrew != nil {
+		t.Fatalf("unexpected brew error: %v", errBrew)
+	}
+
+	if eng.Player.GetPotionCount("salep_pemulih") < 1 {
+		t.Errorf("expected at least 1 salep_pemulih in pouch")
+	}
+
+	// Test drinking in town
+	eng.Player.HP = 50
+	eng.Player.MaxHP = 100
+	errDrink := eng.DrinkPotionInTown("salep_pemulih")
+	if errDrink != nil {
+		t.Fatalf("unexpected drink error: %v", errDrink)
+	}
+	if eng.Player.HP != 95 {
+		t.Errorf("expected HP 95, got %d", eng.Player.HP)
+	}
+}
+
+func TestEngineTavernAndCompanions(t *testing.T) {
+	eng := NewGame("Commander", "Oakhaven")
+
+	// Building not present
+	errNoTavern := eng.HireCompanion("valen_rogue")
+	if errNoTavern == nil {
+		t.Errorf("expected error hiring companion without tavern")
+	}
+
+	// Build Tavern level 1
+	eng.Village.Buildings[settlement.BuildingTavern] = 1
+	eng.Village.Treasury = 300
+	eng.Village.Rations = 10
+
+	// Hire Valen Rogue
+	errHire := eng.HireCompanion("valen_rogue")
+	if errHire != nil {
+		t.Fatalf("unexpected hire error: %v", errHire)
+	}
+	if len(eng.Player.Party) != 1 {
+		t.Fatalf("expected party size 1, got %d", len(eng.Player.Party))
+	}
+	if eng.Player.Party[0].Role != "Rogue" {
+		t.Errorf("expected role Rogue, got %s", eng.Player.Party[0].Role)
+	}
+
+	// Tavern Rest
+	eng.Player.Sanity = 40
+	eng.Player.MaxSanity = 100
+	eng.Player.HP = 60
+	eng.Player.MaxHP = 100
+	errRest := eng.TavernRest()
+	if errRest != nil {
+		t.Fatalf("unexpected rest error: %v", errRest)
+	}
+	if eng.Player.Sanity != 60 || eng.Player.HP != 75 {
+		t.Errorf("expected Sanity 60 and HP 75, got Sanity %d, HP %d", eng.Player.Sanity, eng.Player.HP)
+	}
+
+	// Tavern Rumor
+	rumor := eng.TavernRumor()
+	if rumor == "" {
+		t.Errorf("expected non-empty tavern rumor")
+	}
+
+	// Dismiss companion
+	errDismiss := eng.DismissCompanion("valen_rogue")
+	if errDismiss != nil {
+		t.Fatalf("unexpected dismiss error: %v", errDismiss)
+	}
+	if len(eng.Player.Party) != 0 {
+		t.Errorf("expected empty party after dismissal")
+	}
+}
+
+func TestEngineExpeditionCompanionCutAndFall(t *testing.T) {
+	eng := NewGame("Explorer", "Oakhaven")
+	eng.Village.Rations = 20
+	eng.Village.Treasury = 100
+
+	// Add 2 companions: one Rogue (10% cut), one Vanguard (15% cut, dead)
+	eng.Player.AddCompanion(character.Companion{
+		ID:         "valen_rogue",
+		Name:       "Valen si Belati",
+		Role:       "Rogue",
+		CutPercent: 10,
+		HP:         50,
+		MaxHP:      50,
+		IsAlive:    true,
+	})
+	eng.Player.AddCompanion(character.Companion{
+		ID:         "sir_gareth",
+		Name:       "Sir Gareth",
+		Role:       "Vanguard",
+		CutPercent: 15,
+		MaxHP:      95,
+	})
+	// Simulate Sir Gareth falling in battle during expedition
+	eng.Player.Party[1].HP = 0
+	eng.Player.Party[1].IsAlive = false
+
+	_ = eng.StartExpedition(3)
+	eng.ActiveExpedition.GoldFound = 100
+	eng.ActiveExpedition.LumberFound = 10
+	eng.FinishExpedition(true)
+
+	// Valen gets 10% (10 Gold). Gareth is dead so gets 0. Net gold = 90.
+	if eng.LastExpeditionSummary.CompanionCut != 10 {
+		t.Errorf("expected companion cut 10, got %d", eng.LastExpeditionSummary.CompanionCut)
+	}
+	if eng.Village.Treasury != 100+90 {
+		t.Errorf("expected treasury 190, got %d", eng.Village.Treasury)
+	}
+	// Fallen companion should be removed from party
+	if len(eng.Player.Party) != 1 || eng.Player.Party[0].ID != "valen_rogue" {
+		t.Errorf("expected party to have only living valen_rogue, got %+v", eng.Player.Party)
+	}
+}
+
+func TestEngineSiegeEvent(t *testing.T) {
+	eng := NewGame("Defender", "Oakhaven")
+	eng.Village.Buildings[settlement.BuildingFortification] = 3
+	eng.Village.Workers.Militia = 3
+	eng.Village.RecalculateDefense()
+	eng.Village.Treasury = 200
+
+	res := eng.TriggerDirectSiege("bandit_raiders")
+	if res == nil {
+		t.Fatalf("expected siege result to not be nil")
+	}
+	if eng.CurrentState != StateSiegeReport {
+		t.Errorf("expected CurrentState StateSiegeReport, got %v", eng.CurrentState)
+	}
+	if !res.Victory {
+		t.Errorf("expected victory with defense 100 vs bandit")
+	}
+
+	// Threat Info
+	score, status := eng.ThreatInfo()
+	if score <= 0 || status == "" {
+		t.Errorf("expected valid threat score and status")
+	}
+}
+
+func TestEngineVictoryCondition(t *testing.T) {
+	eng := NewGame("Champion", "Oakhaven")
+
+	// Initially condition should fail
+	if eng.CheckVictoryCondition() {
+		t.Errorf("victory condition should not be met initially")
+	}
+
+	// Meet all victory requirements:
+	// 1. Defeat boss
+	eng.BossDefeated = true
+	// 2. Town Hall Lv 3
+	eng.Village.Buildings[settlement.BuildingTownHall] = 3
+	// 3. Strong defense >= 70
+	eng.Village.Buildings[settlement.BuildingFortification] = 2
+	eng.Village.RecalculateDefense()
+
+	if !eng.CheckVictoryCondition() {
+		t.Fatalf("expected victory condition to be met")
+	}
+	if !eng.HasWonGame {
+		t.Errorf("expected HasWonGame to be true")
+	}
+
+	// Acknowledge victory returns to sandbox
+	eng.AcknowledgeVictory()
+	if !eng.VictoryAcknowledged {
+		t.Errorf("expected VictoryAcknowledged to be true")
+	}
+	if eng.CurrentState != StateTownMenu {
+		t.Errorf("expected CurrentState StateTownMenu, got %v", eng.CurrentState)
+	}
+	// Once acknowledged, CheckVictoryCondition should not trigger again
+	if eng.CheckVictoryCondition() {
+		t.Errorf("expected CheckVictoryCondition false after acknowledgement")
+	}
+}

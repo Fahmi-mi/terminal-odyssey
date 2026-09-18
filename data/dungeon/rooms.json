@@ -1,0 +1,82 @@
+[
+  {
+    "id": "combat_corridor_1",
+    "type": "combat",
+    "title": "Lorong Tulang Belulang",
+    "description": "Langkah kakimu menggema di antara tumpukan tulang tua yang berserakan di lantai batu lembap. Dari sudut bayangan, tampak sosok zirah kerangka bangkit mengacungkan pedang karatan",
+    "enemy_ids": ["skeleton_scout", "cave_spider"]
+  },
+  {
+    "id": "combat_spider_nest",
+    "type": "combat",
+    "title": "Sarang Laba-laba Celah Lembap",
+    "description": "Jaring-jaring tebal membentang menutupi dinding kubah lorong. Sepasang mata merah menyala di kegelapan langit-langit sebelum seekor laba-laba raksasa melompat turun",
+    "enemy_ids": ["cave_spider"]
+  },
+  {
+    "id": "combat_goblin_ambush",
+    "type": "combat",
+    "title": "Pos Jebakan Perampok",
+    "description": "Batu kerikil berjatuhan dari atas langit-langit runtuh. Sosok goblin licik melompat keluar dari balik pilar batu sambil mengayunkan belati bergerigi",
+    "enemy_ids": ["goblin_raider"]
+  },
+  {
+    "id": "combat_crypt_hall",
+    "type": "combat",
+    "title": "Aula Makam Utama",
+    "description": "Hawa dingin menusuk tulang saat kamu melangkah ke aula berkubah tinggi. Seekor ghoul buas sedang mengais peti nisan sebelum menatapmu dengan geraman lapar",
+    "enemy_ids": ["crypt_ghoul", "catacomb_wraith"]
+  },
+  {
+    "id": "combat_boss_chamber",
+    "type": "combat",
+    "title": "Kamar Persemayaman Terlarang",
+    "description": "Pintu gerbang besi hitam terbuka memperlihatkan tahta batu nisan kuno. Panglima makam berbaju zirah legam bangkit mengayunkan gada raksasa penuh aura dendam",
+    "enemy_ids": ["tomb_overseer", "abyssal_overlord"]
+  },
+  {
+    "id": "combat_abyssal_sanctum",
+    "type": "combat",
+    "title": "Kuil Kegelapan Abyssal",
+    "description": "Ruang altar terdalam katakombe berhawa mencekam. Sosok Penguasa Abyssal melayang di atas genangan darah kuno menatapmu penuh murka",
+    "enemy_ids": ["abyssal_overlord"]
+  },
+  {
+    "id": "treasure_cache",
+    "type": "treasure",
+    "title": "Ruang Simpanan Penjarah",
+    "description": "Sebuah peti kayu lapuk berbalut besi tempa teronggok di bawah reruntuhan rak senjata. Gemboknya sudah rusak akibat karat termakan usia",
+    "min_gold": 25,
+    "max_gold": 50,
+    "min_rations": 1,
+    "max_rations": 3,
+    "materials": [
+      {"type": "stone", "amount": 10},
+      {"type": "lumber", "amount": 15}
+    ]
+  },
+  {
+    "id": "rest_shrine",
+    "type": "rest",
+    "title": "Suaka Pertapa Tersembunyi",
+    "description": "Sebuah ceruk gua terpencil yang aman dari jangkauan monster. Di sudut ruangan mengalir mata air jernih dan sisa perapian batu yang masih hangat",
+    "heal_percent": 35,
+    "torch_bonus": 30
+  },
+  {
+    "id": "mystery_altar",
+    "type": "mystery",
+    "title": "Altar Batu Berukir Rune",
+    "description": "Altar batu obsidian hitam memancarkan pendar ungu redup di tengah ruangan melingkar. Di atasnya terletak relik koin kuno yang diselimuti aura magis misterius",
+    "stat_req": "Ingenuity",
+    "req_value": 10,
+    "reward_gold": 45,
+    "penalty_damage": 12
+  },
+  {
+    "id": "exit_stairs",
+    "type": "exit",
+    "title": "Tangga Keluar Menuju Permukaan",
+    "description": "Angin segar lembah terasa berhembus melalui celah tangga batu melingkar yang mengarah kembali ke batas luar desa Oakhaven"
+  }
+]

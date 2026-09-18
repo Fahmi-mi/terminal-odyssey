@@ -1,0 +1,389 @@
+package combat
+
+import (
+	"fmt"
+	"math/rand"
+	"strings"
+
+	"github.com/Fahmi-mi/terminal-odyssey/data"
+	"github.com/Fahmi-mi/terminal-odyssey/internal/character"
+)
+
+// Enemy represents an instantiated dungeon monster
+type Enemy struct {
+	ID          string
+	Name        string
+	Description string
+	HP          int
+	MaxHP       int
+	MinDamage   int
+	MaxDamage   int
+	Initiative  int
+	Defense     int
+	GoldReward  int
+	ExpReward   int
+}
+
+// NewEnemyFromDef creates an Enemy from data definition
+func NewEnemyFromDef(def data.EnemyDef) *Enemy {
+	return &Enemy{
+		ID:          def.ID,
+		Name:        def.Name,
+		Description: def.Description,
+		HP:          def.MaxHP,
+		MaxHP:       def.MaxHP,
+		MinDamage:   def.MinDamage,
+		MaxDamage:   def.MaxDamage,
+		Initiative:  def.Initiative,
+		Defense:     def.Defense,
+		GoldReward:  def.GoldReward,
+		ExpReward:   def.ExpReward,
+	}
+}
+
+// NewEnemyByID loads enemy definition and instantiates Enemy
+func NewEnemyByID(id string) (*Enemy, error) {
+	defs, err := data.LoadEnemyDefs()
+	if err != nil {
+		return nil, err
+	}
+	for _, d := range defs {
+		if d.ID == id {
+			return NewEnemyFromDef(d), nil
+		}
+	}
+	return nil, fmt.Errorf("musuh dengan ID %s tidak ditemukan", id)
+}
+
+// CombatSession manages a turn-based battle between player and enemy
+type CombatSession struct {
+	Player           *character.Player
+	Enemy            *Enemy
+	PlayerDefending  bool
+	TemporaryAtkBuff int
+	TurnCount        int
+	IsOver           bool
+	Won              bool
+	Fled             bool
+	Logs             []string
+}
+
+// NewCombatSession starts a new battle and logs initial engagement
+func NewCombatSession(p *character.Player, enemy *Enemy) *CombatSession {
+	s := &CombatSession{
+		Player:    p,
+		Enemy:     enemy,
+		TurnCount: 1,
+		Logs:      make([]string, 0),
+	}
+
+	playerInit := p.Stats.Agility + p.EquippedWeapon.Initiative
+	s.addLog(fmt.Sprintf("[!] Bertemu dengan %s (HP %d/%d)", enemy.Name, enemy.HP, enemy.MaxHP))
+
+	if playerInit >= enemy.Initiative {
+		s.addLog("[i] Kecepatan inisiatif unggul! Giliran Anda melangkah terlebih dahulu")
+	} else {
+		s.addLog(fmt.Sprintf("[!] %s bergerak cepat bersiap menerkam", enemy.Name))
+	}
+
+	return s
+}
+
+// PlayerAttack executes a physical attack against the enemy
+func (s *CombatSession) PlayerAttack() (int, bool, error) {
+	if s.IsOver {
+		return 0, false, fmt.Errorf("pertempuran sudah berakhir")
+	}
+
+	w := &s.Player.EquippedWeapon
+	isBroken := false
+	if w.Durability > 0 {
+		w.Durability--
+		s.Player.SyncEquippedToOwned()
+	} else {
+		isBroken = true
+	}
+
+	weaponMin := w.BaseDamage[0]
+	weaponMax := w.BaseDamage[1]
+	if weaponMax < weaponMin {
+		weaponMax = weaponMin
+	}
+
+	rawDmg := rand.Intn(weaponMax-weaponMin+1) + weaponMin
+	mightBonus := s.Player.Stats.Might - 10
+	if mightBonus < 0 {
+		mightBonus = 0
+	}
+
+	critChance := w.CritRate + float64(s.Player.Stats.Agility)*0.005
+	isCrit := rand.Float64() < critChance
+
+	total := rawDmg + mightBonus + s.TemporaryAtkBuff
+
+	// Affix checks
+	if strings.Contains(w.SpecialAffix, "Tempered") {
+		total += 2
+	}
+
+	if isBroken {
+		total = total / 2
+		if total < 1 {
+			total = 1
+		}
+		isCrit = false
+		s.addLog(fmt.Sprintf("[!] Ketahanan %s habis! Serangan tumpul hanya memberi separuh kerusakan", w.Name))
+	} else if isCrit {
+		total = int(float64(total) * 1.5)
+	}
+
+	// Defense calculation (Armor-piercing check)
+	defenseVal := s.Enemy.Defense
+	if strings.Contains(w.SpecialAffix, "Penembus Zirah") {
+		defenseVal = 0
+	}
+
+	netDmg := total - defenseVal
+	if netDmg < 1 {
+		netDmg = 1
+	}
+
+	s.Enemy.HP -= netDmg
+	if s.Enemy.HP < 0 {
+		s.Enemy.HP = 0
+	}
+
+	if isCrit {
+		s.addLog(fmt.Sprintf("[+] SERANGAN KRITIKAL! Tebasan Anda menembus pertahanan %s (-%d HP)", s.Enemy.Name, netDmg))
+	} else {
+		s.addLog(fmt.Sprintf("[+] Serangan %s mengenai %s (-%d HP)", w.Name, s.Enemy.Name, netDmg))
+	}
+
+	// Dagger Bleed Affix
+	if (w.WeaponType == "Daggers" || strings.Contains(w.SpecialAffix, "Bleed")) && s.Enemy.HP > 0 {
+		bleedDmg := 2 + (s.Player.Stats.Agility / 5)
+		s.Enemy.HP -= bleedDmg
+		if s.Enemy.HP < 0 {
+			s.Enemy.HP = 0
+		}
+		s.addLog(fmt.Sprintf("[*] Efek pendarahan mengoyak luka %s (-%d HP)", s.Enemy.Name, bleedDmg))
+	}
+
+	// Check if enemy defeated
+	if s.Enemy.HP <= 0 {
+		s.IsOver = true
+		s.Won = true
+		s.addLog(fmt.Sprintf("[+] %s roboh tak berdaya! Anda memenangkan pertempuran", s.Enemy.Name))
+		s.addLog(fmt.Sprintf("[*] Memperoleh jarahan +%d Emas", s.Enemy.GoldReward))
+		return netDmg, isCrit, nil
+	}
+
+	// Preemptive Strike on turn 1 skips enemy counter
+	if (w.WeaponType == "Polearm" || strings.Contains(w.SpecialAffix, "Pendahuluan")) && s.TurnCount == 1 {
+		s.addLog("[*] Keunggulan jangkauan tombak menahan serangan musuh pada ronde pertama")
+		s.TurnCount++
+		return netDmg, isCrit, nil
+	}
+
+	// Blunt Stun chance
+	if (w.WeaponType == "Blunt" || strings.Contains(w.SpecialAffix, "Stun")) && (isCrit || rand.Float64() < 0.25) {
+		s.addLog(fmt.Sprintf("[*] Hantaman tumpul memicu efek Pingsan (Stun)! %s gagal menyerang balik", s.Enemy.Name))
+		s.TurnCount++
+		return netDmg, isCrit, nil
+	}
+
+	// Enemy counter-attacks
+	s.enemyCounterAttack()
+	s.TurnCount++
+	return netDmg, isCrit, nil
+}
+
+// PlayerDefend enters defensive stance, reducing next enemy damage
+func (s *CombatSession) PlayerDefend() error {
+	if s.IsOver {
+		return fmt.Errorf("pertempuran sudah berakhir")
+	}
+
+	s.PlayerDefending = true
+	if strings.Contains(s.Player.EquippedWeapon.SpecialAffix, "Block") || strings.Contains(s.Player.EquippedWeapon.SpecialAffix, "Perisai") {
+		s.addLog("[i] Anda memasang kuda-kuda tangkisan perisai (+65% reduksi kerusakan)")
+	} else {
+		s.addLog("[i] Anda memasang kuda-kuda bertahan (+50% reduksi kerusakan musuh)")
+	}
+
+	s.enemyCounterAttack()
+	s.TurnCount++
+	return nil
+}
+
+// PlayerHeal consumes a ration from expedition to recover player HP
+func (s *CombatSession) PlayerHeal(healAmount int) error {
+	if s.IsOver {
+		return fmt.Errorf("pertempuran sudah berakhir")
+	}
+
+	oldHP := s.Player.HP
+	s.Player.HP += healAmount
+	if s.Player.HP > s.Player.MaxHP {
+		s.Player.HP = s.Player.MaxHP
+	}
+	gained := s.Player.HP - oldHP
+
+	s.addLog(fmt.Sprintf("[+] Memakan ransum darurat (+%d HP)", gained))
+
+	s.enemyCounterAttack()
+	s.TurnCount++
+	return nil
+}
+
+// PlayerFlee attempts to retreat from the battlefield
+func (s *CombatSession) PlayerFlee() (bool, error) {
+	if s.IsOver {
+		return false, fmt.Errorf("pertempuran sudah berakhir")
+	}
+
+	fleeChance := 0.40 + float64(s.Player.Stats.Agility)*0.02
+	if fleeChance > 0.85 {
+		fleeChance = 0.85
+	}
+
+	if rand.Float64() < fleeChance {
+		s.IsOver = true
+		s.Fled = true
+		s.addLog("[!] Anda berhasil melompat mundur dan meloloskan diri dari kepungan")
+		return true, nil
+	}
+
+	s.addLog("[!] Percobaan kabur gagal! Musuh memotong jalur mundur Anda")
+	s.enemyCounterAttack()
+	s.TurnCount++
+	return false, nil
+}
+
+// enemyCounterAttack executes the enemy turn
+func (s *CombatSession) enemyCounterAttack() {
+	if s.Enemy.HP <= 0 {
+		return
+	}
+
+	eMin := s.Enemy.MinDamage
+	eMax := s.Enemy.MaxDamage
+	if eMax < eMin {
+		eMax = eMin
+	}
+
+	dmg := rand.Intn(eMax-eMin+1) + eMin
+	if s.PlayerDefending {
+		reduction := 0.50
+		if strings.Contains(s.Player.EquippedWeapon.SpecialAffix, "Block") || strings.Contains(s.Player.EquippedWeapon.SpecialAffix, "Perisai") {
+			reduction = 0.65
+		}
+		dmg = int(float64(dmg) * (1.0 - reduction))
+		if dmg < 1 {
+			dmg = 1
+		}
+		s.PlayerDefending = false
+		s.addLog(fmt.Sprintf("[-] Pertahanan Anda meredam serangan %s", s.Enemy.Name))
+	}
+
+	// Vanguard companion damage mitigation (30% absorption)
+	if s.Player.HasCompanionRole("Vanguard") && dmg > 0 {
+		mitigation := int(float64(dmg) * 0.30)
+		if mitigation > 0 {
+			dmg -= mitigation
+			s.addLog(fmt.Sprintf("[*] Pendamping Vanguard menahan gempuran musuh (-%d kerusakan)", mitigation))
+		}
+	}
+	if dmg < 0 {
+		dmg = 0
+	}
+
+	s.Player.HP -= dmg
+	s.addLog(fmt.Sprintf("[-] %s menyerang Anda (-%d HP)", s.Enemy.Name, dmg))
+
+	if s.Player.HP <= 0 {
+		s.Player.HP = 0
+		s.IsOver = true
+		s.Won = false
+		s.addLog(fmt.Sprintf("[!] Tubuh Anda tumbang tak sadarkan diri akibat serangan %s", s.Enemy.Name))
+	}
+}
+
+// PlayerDrinkPotion consumes a potion during combat and advances turn
+func (s *CombatSession) PlayerDrinkPotion(potionID string) (int, error) {
+	if s.IsOver {
+		return 0, fmt.Errorf("pertempuran sudah berakhir")
+	}
+	if s.Player.GetPotionCount(potionID) <= 0 {
+		return 0, fmt.Errorf("anda tidak memiliki ramuan tersebut")
+	}
+
+	effectVal := 0
+	switch potionID {
+	case "salep_pemulih":
+		if s.Player.HP >= s.Player.MaxHP {
+			return 0, fmt.Errorf("darah (HP) karakter sudah maksimal")
+		}
+		s.Player.UsePotion(potionID)
+		healAmount := 45
+		oldHP := s.Player.HP
+		s.Player.HP += healAmount
+		if s.Player.HP > s.Player.MaxHP {
+			s.Player.HP = s.Player.MaxHP
+		}
+		effectVal = s.Player.HP - oldHP
+		s.addLog(fmt.Sprintf("[+] Mengoleskan Salep Pemulih (+%d HP, Darah: %d/%d)", effectVal, s.Player.HP, s.Player.MaxHP))
+
+	case "tonik_penenang":
+		if s.Player.Sanity >= s.Player.MaxSanity {
+			return 0, fmt.Errorf("kewarasan karakter sudah maksimal")
+		}
+		s.Player.UsePotion(potionID)
+		gainSanity := 40
+		oldSanity := s.Player.Sanity
+		s.Player.Sanity += gainSanity
+		if s.Player.Sanity > s.Player.MaxSanity {
+			s.Player.Sanity = s.Player.MaxSanity
+		}
+		effectVal = s.Player.Sanity - oldSanity
+		s.addLog(fmt.Sprintf("[+] Meminum Tonik Penenang Jiwa (+%d Sanity, Kewarasan: %d/%d)", effectVal, s.Player.Sanity, s.Player.MaxSanity))
+
+	case "penawar_racun":
+		s.Player.UsePotion(potionID)
+		healAmount := 15
+		s.Player.HP += healAmount
+		if s.Player.HP > s.Player.MaxHP {
+			s.Player.HP = s.Player.MaxHP
+		}
+		s.Player.Sanity += 15
+		if s.Player.Sanity > s.Player.MaxSanity {
+			s.Player.Sanity = s.Player.MaxSanity
+		}
+		effectVal = healAmount
+		s.addLog(fmt.Sprintf("[+] Menenggak Penawar Racun (+%d HP, +15 Sanity)", healAmount))
+
+	case "eliksir_kekuatan":
+		s.Player.UsePotion(potionID)
+		s.TemporaryAtkBuff += 8
+		effectVal = 8
+		s.addLog("[+] Menenggak Eliksir Kekuatan Tempur (Kekuatan tebasan bertambah +8 ATK)")
+
+	case "minyak_obor":
+		return 0, fmt.Errorf("minyak obor hanya dapat digunakan saat penjelajahan lorong katakombe")
+
+	default:
+		return 0, fmt.Errorf("ramuan tidak dikenal")
+	}
+
+	s.enemyCounterAttack()
+	s.TurnCount++
+	return effectVal, nil
+}
+
+// addLog keeps the combat log to the most recent entries
+func (s *CombatSession) addLog(entry string) {
+	s.Logs = append(s.Logs, entry)
+	if len(s.Logs) > 8 {
+		s.Logs = s.Logs[len(s.Logs)-8:]
+	}
+}
