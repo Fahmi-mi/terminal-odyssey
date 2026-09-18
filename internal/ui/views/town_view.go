@@ -51,14 +51,25 @@ func RenderTownView(e *engine.Engine, width int) string {
 		fmt.Sprintf("  Garda        : %s", styles.DefenseStyle.Render(fmt.Sprintf("%d Orang", v.Workers.Militia))),
 	}
 
+	threatScore, threatStatus := e.ThreatInfo()
+	var threatColored string
+	switch threatStatus {
+	case "Aman":
+		threatColored = lipgloss.NewStyle().Bold(true).Foreground(styles.ColorEmerald).Render(fmt.Sprintf("%d (%s)", threatScore, threatStatus))
+	case "Waspada":
+		threatColored = lipgloss.NewStyle().Bold(true).Foreground(styles.ColorWarning).Render(fmt.Sprintf("%d (%s)", threatScore, threatStatus))
+	default:
+		threatColored = lipgloss.NewStyle().Bold(true).Foreground(styles.ColorCrimson).Render(fmt.Sprintf("%d (%s)", threatScore, threatStatus))
+	}
+
 	rightLines := []string{
 		styles.SubtitleStyle.Render("[ LOGISTIK & PERTAHANAN ]"),
 		fmt.Sprintf("  Pertahanan   : %s", styles.DefenseStyle.Render(fmt.Sprintf("%d Poin", v.DefenseVal))),
+		fmt.Sprintf("  Ancaman      : %s", threatColored),
 		fmt.Sprintf("  Kas Emas     : %s", styles.ResourceGold.Render(fmt.Sprintf("%d Gold", v.Treasury))),
 		fmt.Sprintf("  Kayu         : %s", styles.ResourceWood.Render(fmt.Sprintf("%d / %d", v.Lumber, maxL))),
 		fmt.Sprintf("  Batu         : %s", styles.ResourceStone.Render(fmt.Sprintf("%d / %d", v.Stone, maxS))),
 		fmt.Sprintf("  Ransum       : %s", styles.ResourceFood.Render(fmt.Sprintf("%d / %d", v.Rations, maxR))),
-		"",
 	}
 
 	leftCol := lipgloss.NewStyle().Width(halfWidth).Render(strings.Join(leftLines, "\n"))
@@ -176,6 +187,7 @@ func RenderTownView(e *engine.Engine, width int) string {
 		{"3", "Bengkel Pandai Besi"},
 		{"4", "Pusat Latihan Karakter"},
 		{"5", "Kedai Minum (Pendamping)"},
+		{"S", "Simpan Permainan"},
 	}
 
 	rightActions := []actionItem{
@@ -183,6 +195,7 @@ func RenderTownView(e *engine.Engine, width int) string {
 		{"7", "Laboratorium Alkimia"},
 		{"W", "Alokasi Pekerja"},
 		{"D", "Lewati Hari (Produksi)"},
+		{"M", "Menu Utama (Title)"},
 		{"Q", "Keluar Permainan"},
 	}
 

@@ -56,6 +56,8 @@ func AllBuildingsList() []string {
 		BuildingApothecary,
 		BuildingTavern,
 		BuildingCaravanPost,
+		BuildingWatchtower,
+		BuildingFortification,
 	}
 }
 

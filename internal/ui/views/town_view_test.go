@@ -8,6 +8,7 @@ import (
 
 	"github.com/Fahmi-mi/terminal-odyssey/internal/combat"
 	"github.com/Fahmi-mi/terminal-odyssey/internal/engine"
+	"github.com/Fahmi-mi/terminal-odyssey/internal/save"
 	"github.com/Fahmi-mi/terminal-odyssey/internal/settlement"
 )
 
@@ -90,6 +91,40 @@ func TestRenderViewsBorderAlignment(t *testing.T) {
 			_ = e2.HireCompanion("valen_rogue")
 			return e2
 		}(), 0, 0, 80)},
+		{"TitleViewMain", RenderTitleView(TitleModeMain, 0, nil, "", 80)},
+		{"TitleViewSlots", RenderTitleView(TitleModeSelectSlot, 0, []save.SaveSlotInfo{
+			{SlotID: save.Slot1, Exists: true, DayCounter: 5, VillageName: "Oakhaven", PlayerName: "Pahlawan", SaveTime: "2026-09-18 12:00:00"},
+			{SlotID: save.Slot2, Exists: false},
+		}, "", 80)},
+		{"TitleViewWithAlert", RenderTitleView(TitleModeSelectSlot, 0, []save.SaveSlotInfo{
+			{SlotID: save.Slot1, Exists: true, DayCounter: 5, VillageName: "Oakhaven", PlayerName: "Pahlawan", SaveTime: "2026-09-18 12:00:00"},
+			{SlotID: save.Slot2, Exists: false},
+		}, "Slot simpanan masih kosong", 80)},
+		{"SaveMenuView", RenderSaveMenuView(eng, 0, []save.SaveSlotInfo{
+			{SlotID: save.Slot1, Exists: true, DayCounter: 5, VillageName: "Oakhaven", SaveTime: "2026-09-18 12:00:00"},
+			{SlotID: save.Slot2, Exists: false},
+			{SlotID: save.Slot3, Exists: false},
+		}, 80)},
+		{"SiegeViewVictory", RenderSiegeView(func() *engine.Engine {
+			e2 := engine.NewGame("Sang Petualang", "Oakhaven")
+			e2.Village.DefenseVal = 100
+			e2.TriggerDirectSiege("bandit_raiders")
+			return e2
+		}(), 80)},
+		{"SiegeViewDefeat", RenderSiegeView(func() *engine.Engine {
+			e2 := engine.NewGame("Sang Petualang", "Oakhaven")
+			e2.Village.DefenseVal = 5
+			e2.TriggerDirectSiege("corrupted_legion")
+			return e2
+		}(), 80)},
+		{"VictoryView", RenderVictoryView(func() *engine.Engine {
+			e2 := engine.NewGame("Sang Petualang", "Oakhaven")
+			e2.BossDefeated = true
+			e2.Village.Buildings[settlement.BuildingTownHall] = 3
+			e2.Village.Buildings[settlement.BuildingFortification] = 2
+			e2.Village.RecalculateDefense()
+			return e2
+		}(), 80)},
 	}
 
 	for _, tc := range testCases {

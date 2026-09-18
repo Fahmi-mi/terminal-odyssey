@@ -8,7 +8,7 @@ import (
 
 // Files embeds all JSON files in the data directory
 //
-//go:embed scenarios/*.json buildings/*.json events/*.json dungeon/*.json crafting/*.json economy/*.json alchemy/*.json companions/*.json
+//go:embed scenarios/*.json buildings/*.json events/*.json dungeon/*.json crafting/*.json economy/*.json alchemy/*.json companions/*.json siege/*.json
 var Files embed.FS
 
 // ScenarioVillage holds initial village configuration
@@ -365,5 +365,29 @@ func LoadCompanionDefs() ([]CompanionDef, error) {
 	return defs, nil
 }
 
+// RaiderGroupDef holds raider siege attacker definitions
+type RaiderGroupDef struct {
+	ID               string `json:"id"`
+	Name             string `json:"name"`
+	Description      string `json:"description"`
+	MinThreat        int    `json:"min_threat"`
+	BaseAssaultPower int    `json:"base_assault_power"`
+	TargetLoot       string `json:"target_loot"`
+	GoldLootReward   int    `json:"gold_loot_reward"`
+	CaptiveChance    int    `json:"captive_chance"`
+	AssaultVariance  int    `json:"assault_variance"`
+}
 
+// LoadRaiderDefs reads siege/raiders.json
+func LoadRaiderDefs() ([]RaiderGroupDef, error) {
+	bytes, err := Files.ReadFile("siege/raiders.json")
+	if err != nil {
+		return nil, fmt.Errorf("gagal membaca file siege/raiders.json: %w", err)
+	}
 
+	var defs []RaiderGroupDef
+	if err := json.Unmarshal(bytes, &defs); err != nil {
+		return nil, fmt.Errorf("gagal parsing siege/raiders.json: %w", err)
+	}
+	return defs, nil
+}

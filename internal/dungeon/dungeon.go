@@ -48,6 +48,7 @@ type Expedition struct {
 	MaxBackpack        int
 	IsCompleted        bool
 	IsDefeated         bool
+	BossDefeated       bool
 	Logs               []string
 	ActiveCombat       *combat.CombatSession
 }
@@ -95,7 +96,7 @@ func pickDefByType(roomType string, depth int, defMap map[string]data.RoomDef, u
 		case 4:
 			candidates = []string{"combat_crypt_hall", "combat_goblin_ambush"}
 		case 5:
-			candidates = []string{"combat_boss_chamber"}
+			candidates = []string{"combat_boss_chamber", "combat_abyssal_sanctum"}
 		default:
 			candidates = []string{"combat_corridor_1"}
 		}
@@ -781,6 +782,9 @@ func (exp *Expedition) OnCombatWon() {
 	exp.EnemiesDefeated++
 	if room.Enemy != nil {
 		exp.GoldFound += room.Enemy.GoldReward
+		if room.Enemy.ID == "abyssal_overlord" || room.Enemy.ID == "tomb_overseer" {
+			exp.BossDefeated = true
+		}
 	}
 	exp.ActiveCombat = nil
 }

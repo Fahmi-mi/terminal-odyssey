@@ -1,0 +1,46 @@
+[
+  {
+    "id": "bandit_raiders",
+    "name": "Bandit Penjarah Lembah",
+    "description": "Kelompok bandit oportunis bersenjata parang karatan yang mengincar kas emas desa",
+    "min_threat": 25,
+    "base_assault_power": 35,
+    "target_loot": "emas dan ransum",
+    "gold_loot_reward": 45,
+    "captive_chance": 30,
+    "assault_variance": 10
+  },
+  {
+    "id": "goblin_horde",
+    "name": "Pasukan Penyerbu Goblin",
+    "description": "Gerombolan goblin bengis bersenjatakan tombak bambu runcing dan panah api",
+    "min_threat": 50,
+    "base_assault_power": 55,
+    "target_loot": "bahan makanan dan komoditas",
+    "gold_loot_reward": 70,
+    "captive_chance": 20,
+    "assault_variance": 15
+  },
+  {
+    "id": "undead_scourge",
+    "name": "Gerombolan Mayat Hidup Kelana",
+    "description": "Prajurit zombi dan kerangka purba yang bangkit akibat kegelapan katakombe",
+    "min_threat": 75,
+    "base_assault_power": 80,
+    "target_loot": "jiwa dan nyawa penduduk",
+    "gold_loot_reward": 100,
+    "captive_chance": 10,
+    "assault_variance": 20
+  },
+  {
+    "id": "corrupted_legion",
+    "name": "Legiun Terkutuk Katakombe",
+    "description": "Pasukan zirah hitam pembawa panji kegelapan yang berniat meratakan seluruh pemukiman",
+    "min_threat": 100,
+    "base_assault_power": 110,
+    "target_loot": "seluruh isi pemukiman",
+    "gold_loot_reward": 160,
+    "captive_chance": 40,
+    "assault_variance": 25
+  }
+]

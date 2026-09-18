@@ -438,7 +438,65 @@ func TestEngineExpeditionCompanionCutAndFall(t *testing.T) {
 	}
 }
 
+func TestEngineSiegeEvent(t *testing.T) {
+	eng := NewGame("Defender", "Oakhaven")
+	eng.Village.Buildings[settlement.BuildingFortification] = 3
+	eng.Village.Workers.Militia = 3
+	eng.Village.RecalculateDefense()
+	eng.Village.Treasury = 200
 
+	res := eng.TriggerDirectSiege("bandit_raiders")
+	if res == nil {
+		t.Fatalf("expected siege result to not be nil")
+	}
+	if eng.CurrentState != StateSiegeReport {
+		t.Errorf("expected CurrentState StateSiegeReport, got %v", eng.CurrentState)
+	}
+	if !res.Victory {
+		t.Errorf("expected victory with defense 100 vs bandit")
+	}
 
+	// Threat Info
+	score, status := eng.ThreatInfo()
+	if score <= 0 || status == "" {
+		t.Errorf("expected valid threat score and status")
+	}
+}
 
+func TestEngineVictoryCondition(t *testing.T) {
+	eng := NewGame("Champion", "Oakhaven")
 
+	// Initially condition should fail
+	if eng.CheckVictoryCondition() {
+		t.Errorf("victory condition should not be met initially")
+	}
+
+	// Meet all victory requirements:
+	// 1. Defeat boss
+	eng.BossDefeated = true
+	// 2. Town Hall Lv 3
+	eng.Village.Buildings[settlement.BuildingTownHall] = 3
+	// 3. Strong defense >= 70
+	eng.Village.Buildings[settlement.BuildingFortification] = 2
+	eng.Village.RecalculateDefense()
+
+	if !eng.CheckVictoryCondition() {
+		t.Fatalf("expected victory condition to be met")
+	}
+	if !eng.HasWonGame {
+		t.Errorf("expected HasWonGame to be true")
+	}
+
+	// Acknowledge victory returns to sandbox
+	eng.AcknowledgeVictory()
+	if !eng.VictoryAcknowledged {
+		t.Errorf("expected VictoryAcknowledged to be true")
+	}
+	if eng.CurrentState != StateTownMenu {
+		t.Errorf("expected CurrentState StateTownMenu, got %v", eng.CurrentState)
+	}
+	// Once acknowledged, CheckVictoryCondition should not trigger again
+	if eng.CheckVictoryCondition() {
+		t.Errorf("expected CheckVictoryCondition false after acknowledgement")
+	}
+}
