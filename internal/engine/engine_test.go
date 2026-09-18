@@ -3,6 +3,7 @@ package engine
 import (
 	"testing"
 
+	"github.com/Fahmi-mi/terminal-odyssey/internal/character"
 	"github.com/Fahmi-mi/terminal-odyssey/internal/settlement"
 )
 
@@ -302,6 +303,141 @@ func TestEngineMarketTradeAndCaravans(t *testing.T) {
 		t.Errorf("expected treasury to increase upon caravan return")
 	}
 }
+
+func TestEngineAlchemyAndBrewing(t *testing.T) {
+	eng := NewGame("Alchemist", "Oakhaven")
+
+	// Building not present
+	errNoBuilding := eng.BrewPotion("salep_pemulih")
+	if errNoBuilding == nil {
+		t.Errorf("expected error brewing without alchemy lab")
+	}
+
+	// Build alchemy lab level 1
+	eng.Village.Buildings[settlement.BuildingApothecary] = 1
+	eng.Village.Treasury = 100
+	eng.Village.AddCommodity("herbal_salve", 5)
+
+	errBrew := eng.BrewPotion("salep_pemulih")
+	if errBrew != nil {
+		t.Fatalf("unexpected brew error: %v", errBrew)
+	}
+
+	if eng.Player.GetPotionCount("salep_pemulih") < 1 {
+		t.Errorf("expected at least 1 salep_pemulih in pouch")
+	}
+
+	// Test drinking in town
+	eng.Player.HP = 50
+	eng.Player.MaxHP = 100
+	errDrink := eng.DrinkPotionInTown("salep_pemulih")
+	if errDrink != nil {
+		t.Fatalf("unexpected drink error: %v", errDrink)
+	}
+	if eng.Player.HP != 95 {
+		t.Errorf("expected HP 95, got %d", eng.Player.HP)
+	}
+}
+
+func TestEngineTavernAndCompanions(t *testing.T) {
+	eng := NewGame("Commander", "Oakhaven")
+
+	// Building not present
+	errNoTavern := eng.HireCompanion("valen_rogue")
+	if errNoTavern == nil {
+		t.Errorf("expected error hiring companion without tavern")
+	}
+
+	// Build Tavern level 1
+	eng.Village.Buildings[settlement.BuildingTavern] = 1
+	eng.Village.Treasury = 300
+	eng.Village.Rations = 10
+
+	// Hire Valen Rogue
+	errHire := eng.HireCompanion("valen_rogue")
+	if errHire != nil {
+		t.Fatalf("unexpected hire error: %v", errHire)
+	}
+	if len(eng.Player.Party) != 1 {
+		t.Fatalf("expected party size 1, got %d", len(eng.Player.Party))
+	}
+	if eng.Player.Party[0].Role != "Rogue" {
+		t.Errorf("expected role Rogue, got %s", eng.Player.Party[0].Role)
+	}
+
+	// Tavern Rest
+	eng.Player.Sanity = 40
+	eng.Player.MaxSanity = 100
+	eng.Player.HP = 60
+	eng.Player.MaxHP = 100
+	errRest := eng.TavernRest()
+	if errRest != nil {
+		t.Fatalf("unexpected rest error: %v", errRest)
+	}
+	if eng.Player.Sanity != 60 || eng.Player.HP != 75 {
+		t.Errorf("expected Sanity 60 and HP 75, got Sanity %d, HP %d", eng.Player.Sanity, eng.Player.HP)
+	}
+
+	// Tavern Rumor
+	rumor := eng.TavernRumor()
+	if rumor == "" {
+		t.Errorf("expected non-empty tavern rumor")
+	}
+
+	// Dismiss companion
+	errDismiss := eng.DismissCompanion("valen_rogue")
+	if errDismiss != nil {
+		t.Fatalf("unexpected dismiss error: %v", errDismiss)
+	}
+	if len(eng.Player.Party) != 0 {
+		t.Errorf("expected empty party after dismissal")
+	}
+}
+
+func TestEngineExpeditionCompanionCutAndFall(t *testing.T) {
+	eng := NewGame("Explorer", "Oakhaven")
+	eng.Village.Rations = 20
+	eng.Village.Treasury = 100
+
+	// Add 2 companions: one Rogue (10% cut), one Vanguard (15% cut, dead)
+	eng.Player.AddCompanion(character.Companion{
+		ID:         "valen_rogue",
+		Name:       "Valen si Belati",
+		Role:       "Rogue",
+		CutPercent: 10,
+		HP:         50,
+		MaxHP:      50,
+		IsAlive:    true,
+	})
+	eng.Player.AddCompanion(character.Companion{
+		ID:         "sir_gareth",
+		Name:       "Sir Gareth",
+		Role:       "Vanguard",
+		CutPercent: 15,
+		MaxHP:      95,
+	})
+	// Simulate Sir Gareth falling in battle during expedition
+	eng.Player.Party[1].HP = 0
+	eng.Player.Party[1].IsAlive = false
+
+	_ = eng.StartExpedition(3)
+	eng.ActiveExpedition.GoldFound = 100
+	eng.ActiveExpedition.LumberFound = 10
+	eng.FinishExpedition(true)
+
+	// Valen gets 10% (10 Gold). Gareth is dead so gets 0. Net gold = 90.
+	if eng.LastExpeditionSummary.CompanionCut != 10 {
+		t.Errorf("expected companion cut 10, got %d", eng.LastExpeditionSummary.CompanionCut)
+	}
+	if eng.Village.Treasury != 100+90 {
+		t.Errorf("expected treasury 190, got %d", eng.Village.Treasury)
+	}
+	// Fallen companion should be removed from party
+	if len(eng.Player.Party) != 1 || eng.Player.Party[0].ID != "valen_rogue" {
+		t.Errorf("expected party to have only living valen_rogue, got %+v", eng.Player.Party)
+	}
+}
+
 
 
 

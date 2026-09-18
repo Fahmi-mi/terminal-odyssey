@@ -34,7 +34,14 @@ func RenderExpeditionSummaryView(e *engine.Engine, width int) string {
 	if summary.WasEvacuated {
 		lines = append(lines, styles.AlertSuccess.Render("[ EKSPEDISI SELESAI: BERHASIL DIEVAKUASI ]"))
 		lines = append(lines, "")
-		lines = append(lines, fmt.Sprintf("  Emas Disetor ke Kas Desa  : %s", styles.ResourceGold.Render(fmt.Sprintf("+%d Gold", summary.GoldEarned))))
+		if summary.CompanionCut > 0 {
+			netGold := summary.GoldEarned - summary.CompanionCut
+			lines = append(lines, fmt.Sprintf("  Total Emas Ditemukan      : %s", styles.ResourceGold.Render(fmt.Sprintf("+%d Gold", summary.GoldEarned))))
+			lines = append(lines, fmt.Sprintf("  Bagian Upah Rekan         : %s", styles.ResourceGold.Render(fmt.Sprintf("-%d Gold", summary.CompanionCut))))
+			lines = append(lines, fmt.Sprintf("  Emas Bersih ke Kas Desa   : %s", styles.ResourceGold.Render(fmt.Sprintf("+%d Gold", netGold))))
+		} else {
+			lines = append(lines, fmt.Sprintf("  Emas Disetor ke Kas Desa  : %s", styles.ResourceGold.Render(fmt.Sprintf("+%d Gold", summary.GoldEarned))))
+		}
 		lines = append(lines, fmt.Sprintf("  Kayu Disimpan di Gudang   : %s", styles.ResourceWood.Render(fmt.Sprintf("+%d Kayu", summary.LumberEarned))))
 		lines = append(lines, fmt.Sprintf("  Batu Disimpan di Gudang   : %s", styles.ResourceStone.Render(fmt.Sprintf("+%d Batu", summary.StoneEarned))))
 		lines = append(lines, fmt.Sprintf("  Musuh Berhasil Ditumpas   : %s", styles.ResourceVal.Render(fmt.Sprintf("%d Monster", summary.EnemiesDefeated))))

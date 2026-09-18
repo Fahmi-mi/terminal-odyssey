@@ -1,0 +1,54 @@
+[
+  {
+    "id": "valen_rogue",
+    "name": "Valen si Belati",
+    "role": "Rogue",
+    "role_display": "Pencuri",
+    "description": "Penyusup lincah mantan buronan yang paham seluk-beluk mekanisme perangkap",
+    "hire_cost": 40,
+    "cut_percent": 10,
+    "ration_cost": 1,
+    "hp": 60,
+    "max_hp": 60,
+    "perk_desc": "Melucuti jebakan ruangan dan membuka peti untuk +25% bonus emas"
+  },
+  {
+    "id": "master_alden",
+    "name": "Master Alden",
+    "role": "Scholar",
+    "role_display": "Sarjana",
+    "description": "Peneliti aksara kuno yang menguasai terjemahan rune altar terlarang",
+    "hire_cost": 60,
+    "cut_percent": 15,
+    "ration_cost": 1,
+    "hp": 45,
+    "max_hp": 45,
+    "perk_desc": "Menerjemahkan inskripsi altar kuno, meniadakan kutukan & melipatgandakan relik"
+  },
+  {
+    "id": "sir_gareth",
+    "name": "Sir Gareth",
+    "role": "Vanguard",
+    "role_display": "Ksatria",
+    "description": "Veteran perang berzirah baja yang siap menjadi tameng pelindung rekan",
+    "hire_cost": 75,
+    "cut_percent": 15,
+    "ration_cost": 1,
+    "hp": 95,
+    "max_hp": 95,
+    "perk_desc": "Menyerap 30% kerusakan serangan musuh saat pertempuran berlangsung"
+  },
+  {
+    "id": "suster_selene",
+    "name": "Suster Selene",
+    "role": "Acolyte",
+    "role_display": "Penyembuh",
+    "description": "Biarawati pengelana yang mahir memanjatkan doa ketenangan jiwa",
+    "hire_cost": 50,
+    "cut_percent": 10,
+    "ration_cost": 1,
+    "hp": 50,
+    "max_hp": 50,
+    "perk_desc": "Memulihkan +25 HP dan +15 Sanity tambahan saat beristirahat di suaka"
+  }
+]

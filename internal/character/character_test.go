@@ -111,3 +111,60 @@ func TestUpgradeStatAndDerivedStats(t *testing.T) {
 		t.Errorf("expected error on invalid stat name")
 	}
 }
+
+func TestPlayerPotionsAndCompanions(t *testing.T) {
+	p := NewDefaultPlayer("Alchemist")
+
+	// 1. Potions
+	if p.TotalPotions() != 0 {
+		t.Errorf("expected 0 initial potions, got %d", p.TotalPotions())
+	}
+	p.AddPotion("salep_pemulih", 2)
+	p.AddPotion("minyak_obor", 1)
+
+	if p.GetPotionCount("salep_pemulih") != 2 {
+		t.Errorf("expected 2 salep_pemulih, got %d", p.GetPotionCount("salep_pemulih"))
+	}
+	if p.TotalPotions() != 3 {
+		t.Errorf("expected 3 total potions, got %d", p.TotalPotions())
+	}
+
+	used := p.UsePotion("salep_pemulih")
+	if !used || p.GetPotionCount("salep_pemulih") != 1 {
+		t.Errorf("expected 1 salep_pemulih after use, got %d", p.GetPotionCount("salep_pemulih"))
+	}
+
+	usedNonExistent := p.UsePotion("unknown_potion")
+	if usedNonExistent {
+		t.Errorf("expected false when using non-existent potion")
+	}
+
+	// 2. Companions
+	c := Companion{
+		ID:         "valen_rogue",
+		Name:       "Valen",
+		Role:       "Rogue",
+		CutPercent: 10,
+		HP:         60,
+		MaxHP:      60,
+		IsAlive:    true,
+	}
+	p.AddCompanion(c)
+
+	if !p.HasCompanionRole("Rogue") {
+		t.Errorf("expected Rogue companion in party")
+	}
+	if p.HasCompanionRole("Scholar") {
+		t.Errorf("expected no Scholar in party")
+	}
+
+	comp := p.GetCompanion("Rogue")
+	if comp == nil || comp.Name != "Valen" {
+		t.Errorf("expected Valen companion, got %v", comp)
+	}
+
+	removed := p.RemoveCompanion("valen_rogue")
+	if !removed || p.HasCompanionRole("Rogue") {
+		t.Errorf("expected Valen to be removed from party")
+	}
+}

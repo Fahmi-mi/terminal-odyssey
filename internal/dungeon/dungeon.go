@@ -595,6 +595,15 @@ func (exp *Expedition) ResolveTreasure() string {
 		rationsGained += rand.Intn(room.Def.MaxRations - room.Def.MinRations + 1)
 	}
 
+	if exp.Player.HasCompanionRole("Rogue") {
+		rogueBonus := goldGained / 4
+		if rogueBonus < 5 {
+			rogueBonus = 5
+		}
+		goldGained += rogueBonus
+		exp.AddLog(fmt.Sprintf("[*] Pencuri Valen membongkar kompartemen rahasia peti (+%d Emas bonus)", rogueBonus))
+	}
+
 	exp.GoldFound += goldGained
 	exp.Rations += rationsGained
 	exp.RationsFound += rationsGained
@@ -642,6 +651,19 @@ func (exp *Expedition) ResolveRest() string {
 		exp.Torch = 100
 	}
 
+	if exp.Player.HasCompanionRole("Acolyte") {
+		acolyteHeal := 25
+		exp.Player.HP += acolyteHeal
+		if exp.Player.HP > exp.Player.MaxHP {
+			exp.Player.HP = exp.Player.MaxHP
+		}
+		exp.Player.Sanity += 15
+		if exp.Player.Sanity > exp.Player.MaxSanity {
+			exp.Player.Sanity = exp.Player.MaxSanity
+		}
+		exp.AddLog("[*] Suster Selene memanjatkan doa ketenangan (+25 HP & +15 Sanity)")
+	}
+
 	room.IsResolved = true
 	resText := fmt.Sprintf("Beristirahat di suaka (+%d HP, +%d%% Obor)", actualHealed, torchBonus)
 	room.ResolutionLog = resText
@@ -656,12 +678,18 @@ func (exp *Expedition) ResolveMystery() (bool, string) {
 		return false, "Altar sudah diperiksa"
 	}
 
-	success := exp.Player.Stats.Ingenuity >= room.Def.ReqValue
+	hasScholar := exp.Player.HasCompanionRole("Scholar")
+	success := hasScholar || exp.Player.Stats.Ingenuity >= room.Def.ReqValue
 	room.IsResolved = true
 
 	if success {
-		exp.GoldFound += room.Def.RewardGold
-		resText := fmt.Sprintf("Teka-teki aksara terpecahkan! Altar membuka relik kuno (+%d Emas)", room.Def.RewardGold)
+		bonusReward := 0
+		if hasScholar {
+			bonusReward = 30
+			exp.AddLog("[*] Sarjana Alden menerjemahkan inskripsi rune purba dengan sempurna")
+		}
+		exp.GoldFound += room.Def.RewardGold + bonusReward
+		resText := fmt.Sprintf("Teka-teki aksara terpecahkan! Altar membuka relik kuno (+%d Emas)", room.Def.RewardGold+bonusReward)
 		room.ResolutionLog = resText
 		exp.AddLog(fmt.Sprintf("[+] %s", resText))
 		return true, resText
@@ -677,6 +705,73 @@ func (exp *Expedition) ResolveMystery() (bool, string) {
 	room.ResolutionLog = resText
 	exp.AddLog(fmt.Sprintf("[-] %s", resText))
 	return false, resText
+}
+
+// ConsumePotion consumes an alchemy potion from player pouch during expedition
+func (exp *Expedition) ConsumePotion(potionID string) (int, error) {
+	if exp.Player.GetPotionCount(potionID) <= 0 {
+		return 0, fmt.Errorf("stok ramuan tidak tersedia di ransel")
+	}
+
+	switch potionID {
+	case "salep_pemulih":
+		if exp.Player.HP >= exp.Player.MaxHP {
+			return 0, fmt.Errorf("HP karakter sudah maksimal")
+		}
+		exp.Player.UsePotion(potionID)
+		healAmount := 35
+		oldHP := exp.Player.HP
+		exp.Player.HP += healAmount
+		if exp.Player.HP > exp.Player.MaxHP {
+			exp.Player.HP = exp.Player.MaxHP
+		}
+		actualHeal := exp.Player.HP - oldHP
+		exp.AddLog(fmt.Sprintf("[+] Mengoleskan Salep Pemulih Herbal (+%d HP, HP: %d/%d)", actualHeal, exp.Player.HP, exp.Player.MaxHP))
+		return actualHeal, nil
+
+	case "minyak_obor":
+		if exp.Torch >= 100 {
+			return 0, fmt.Errorf("nyala obor masih maksimal (100%%)")
+		}
+		exp.Player.UsePotion(potionID)
+		exp.Torch += 35
+		if exp.Torch > 100 {
+			exp.Torch = 100
+		}
+		exp.AddLog(fmt.Sprintf("[+] Menuangkan Minyak Obor Murni (Penerangan pulih ke %d%%)", exp.Torch))
+		return 35, nil
+
+	case "tonik_penenang":
+		if exp.Player.Sanity >= exp.Player.MaxSanity {
+			return 0, fmt.Errorf("kewarasan karakter sudah maksimal")
+		}
+		exp.Player.UsePotion(potionID)
+		gainSanity := 25
+		exp.Player.Sanity += gainSanity
+		if exp.Player.Sanity > exp.Player.MaxSanity {
+			exp.Player.Sanity = exp.Player.MaxSanity
+		}
+		exp.AddLog(fmt.Sprintf("[+] Meminum Tonik Penenang Jiwa (+%d Sanity, Kewarasan: %d/%d)", gainSanity, exp.Player.Sanity, exp.Player.MaxSanity))
+		return gainSanity, nil
+
+	case "penawar_racun":
+		exp.Player.UsePotion(potionID)
+		healAmount := 15
+		exp.Player.HP += healAmount
+		if exp.Player.HP > exp.Player.MaxHP {
+			exp.Player.HP = exp.Player.MaxHP
+		}
+		exp.AddLog(fmt.Sprintf("[+] Menenggak Penawar Racun Alami (+%d HP, racun dan pendarahan ternetralisir)", healAmount))
+		return healAmount, nil
+
+	case "eliksir_kekuatan":
+		exp.Player.UsePotion(potionID)
+		exp.AddLog("[+] Menenggak Eliksir Kekuatan Tempur (Kekuatan tebasan bertambah +8 ATK)")
+		return 8, nil
+
+	default:
+		return 0, fmt.Errorf("ramuan tidak dikenal")
+	}
 }
 
 // OnCombatWon handles enemy victory in current room

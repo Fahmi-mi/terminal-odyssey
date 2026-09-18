@@ -8,7 +8,7 @@ import (
 
 // Files embeds all JSON files in the data directory
 //
-//go:embed scenarios/*.json buildings/*.json events/*.json dungeon/*.json crafting/*.json economy/*.json
+//go:embed scenarios/*.json buildings/*.json events/*.json dungeon/*.json crafting/*.json economy/*.json alchemy/*.json companions/*.json
 var Files embed.FS
 
 // ScenarioVillage holds initial village configuration
@@ -306,6 +306,61 @@ func LoadCaravanRouteDefs() ([]CaravanRouteDef, error) {
 	var defs []CaravanRouteDef
 	if err := json.Unmarshal(bytes, &defs); err != nil {
 		return nil, fmt.Errorf("gagal parsing economy/caravan_routes.json: %w", err)
+	}
+	return defs, nil
+}
+
+// AlchemyRecipeDef holds alchemy brewing recipe definitions
+type AlchemyRecipeDef struct {
+	ID              string         `json:"id"`
+	Name            string         `json:"name"`
+	Description     string         `json:"description"`
+	ApothecaryLevel int            `json:"apothecary_level"`
+	GoldCost        int            `json:"gold_cost"`
+	Ingredients     map[string]int `json:"ingredients"`
+	EffectType      string         `json:"effect_type"`
+	EffectValue     int            `json:"effect_value"`
+}
+
+// LoadAlchemyRecipeDefs reads alchemy/recipes.json
+func LoadAlchemyRecipeDefs() ([]AlchemyRecipeDef, error) {
+	bytes, err := Files.ReadFile("alchemy/recipes.json")
+	if err != nil {
+		return nil, fmt.Errorf("gagal membaca file alchemy/recipes.json: %w", err)
+	}
+
+	var defs []AlchemyRecipeDef
+	if err := json.Unmarshal(bytes, &defs); err != nil {
+		return nil, fmt.Errorf("gagal parsing alchemy/recipes.json: %w", err)
+	}
+	return defs, nil
+}
+
+// CompanionDef holds mercenary companion recruitment definitions
+type CompanionDef struct {
+	ID          string `json:"id"`
+	Name        string `json:"name"`
+	Role        string `json:"role"`
+	RoleDisplay string `json:"role_display"`
+	Description string `json:"description"`
+	HireCost    int    `json:"hire_cost"`
+	CutPercent  int    `json:"cut_percent"`
+	RationCost  int    `json:"ration_cost"`
+	HP          int    `json:"hp"`
+	MaxHP       int    `json:"max_hp"`
+	PerkDesc    string `json:"perk_desc"`
+}
+
+// LoadCompanionDefs reads companions/mercenaries.json
+func LoadCompanionDefs() ([]CompanionDef, error) {
+	bytes, err := Files.ReadFile("companions/mercenaries.json")
+	if err != nil {
+		return nil, fmt.Errorf("gagal membaca file companions/mercenaries.json: %w", err)
+	}
+
+	var defs []CompanionDef
+	if err := json.Unmarshal(bytes, &defs); err != nil {
+		return nil, fmt.Errorf("gagal parsing companions/mercenaries.json: %w", err)
 	}
 	return defs, nil
 }

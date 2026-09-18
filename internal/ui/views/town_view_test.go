@@ -76,6 +76,20 @@ func TestRenderViewsBorderAlignment(t *testing.T) {
 			e2.Village.Buildings[settlement.BuildingCaravanPost] = 2
 			return e2
 		}(), 0, 1, 0, 80)},
+		{"AlchemyViewLvl0", RenderAlchemyView(eng, 0, 80)},
+		{"AlchemyViewLvl1", RenderAlchemyView(func() *engine.Engine {
+			e2 := engine.NewGame("Sang Petualang", "Oakhaven")
+			e2.Village.Buildings[settlement.BuildingApothecary] = 1
+			return e2
+		}(), 0, 80)},
+		{"TavernViewRecruit", RenderTavernView(eng, 0, 0, 80)},
+		{"TavernViewRumorAndDining", RenderTavernView(eng, 0, 1, 80)},
+		{"TavernViewWithParty", RenderTavernView(func() *engine.Engine {
+			e2 := engine.NewGame("Sang Petualang", "Oakhaven")
+			e2.Village.Buildings[settlement.BuildingTavern] = 2
+			_ = e2.HireCompanion("valen_rogue")
+			return e2
+		}(), 0, 0, 80)},
 	}
 
 	for _, tc := range testCases {
@@ -127,6 +141,19 @@ func TestSelectPriorityDailyLogs(t *testing.T) {
 	// Priority 3: [+] Seorang pengembara
 	if !strings.Contains(res2[2], "pengembara") {
 		t.Errorf("expected third priority to be pengembara, got %s", res2[2])
+	}
+}
+
+func TestTownViewLineCount(t *testing.T) {
+	eng := engine.NewGame("Sang Petualang", "Oakhaven")
+	rendered := RenderTownView(eng, 80)
+	lines := strings.Split(rendered, "\n")
+	for i, l := range lines {
+		t.Logf("%2d: %s", i+1, l)
+	}
+	t.Logf("TownView total line count: %d", len(lines))
+	if len(lines) > 34 {
+		t.Errorf("TownView exceeds expected height: %d lines (max 34)", len(lines))
 	}
 }
 

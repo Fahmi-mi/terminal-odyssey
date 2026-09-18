@@ -5,6 +5,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
+	"github.com/Fahmi-mi/terminal-odyssey/internal/combat"
 	"github.com/Fahmi-mi/terminal-odyssey/internal/engine"
 	"github.com/Fahmi-mi/terminal-odyssey/internal/settlement"
 )
@@ -174,4 +175,160 @@ func TestAppModel_ViewRendering(t *testing.T) {
 	if len(viewMarket) == 0 {
 		t.Errorf("expected non-empty market view")
 	}
+
+	model.Engine.SwitchState(engine.StateAlchemyLab)
+	viewAlchemy := model.View()
+	if len(viewAlchemy) == 0 {
+		t.Errorf("expected non-empty alchemy view")
+	}
+
+	model.Engine.SwitchState(engine.StateTavernRecruit)
+	viewTavern := model.View()
+	if len(viewTavern) == 0 {
+		t.Errorf("expected non-empty tavern view")
+	}
 }
+
+func TestAppModel_AlchemyNavigationAndBrewing(t *testing.T) {
+	eng := engine.NewGame("Alchemist", "Oakhaven")
+	model := NewAppModel(eng)
+
+	// Press '7' without lab -> alert set, stays in town menu
+	model.Update(makeKeyMsg("7"))
+	if model.Engine.CurrentState != engine.StateTownMenu {
+		t.Errorf("expected StateTownMenu when lab not built")
+	}
+
+	// Build lab level 1
+	eng.Village.Buildings[settlement.BuildingApothecary] = 1
+	eng.Village.Treasury = 200
+	eng.Village.AddCommodity("herbal_salve", 10)
+
+	// Press '7' to enter
+	model.Update(makeKeyMsg("7"))
+	if model.Engine.CurrentState != engine.StateAlchemyLab {
+		t.Fatalf("expected StateAlchemyLab, got %v", model.Engine.CurrentState)
+	}
+
+	// Navigate with down and up
+	model.Update(makeKeyMsg("down"))
+	if model.selectedAlchemyIdx != 1 {
+		t.Errorf("expected selectedAlchemyIdx 1, got %d", model.selectedAlchemyIdx)
+	}
+	model.Update(makeKeyMsg("up"))
+	if model.selectedAlchemyIdx != 0 {
+		t.Errorf("expected selectedAlchemyIdx 0, got %d", model.selectedAlchemyIdx)
+	}
+
+	// Press enter to brew salep_pemulih
+	model.Update(makeKeyMsg("enter"))
+	if eng.Player.GetPotionCount("salep_pemulih") < 1 {
+		t.Errorf("expected brewed potion in player pouch")
+	}
+
+	// Press esc to return to town
+	model.Update(makeKeyMsg("esc"))
+	if model.Engine.CurrentState != engine.StateTownMenu {
+		t.Errorf("expected StateTownMenu after esc, got %v", model.Engine.CurrentState)
+	}
+}
+
+func TestAppModel_TavernNavigationAndCompanions(t *testing.T) {
+	eng := engine.NewGame("Commander", "Oakhaven")
+	model := NewAppModel(eng)
+
+	// Press '5' without tavern -> stays in town menu
+	model.Update(makeKeyMsg("5"))
+	if model.Engine.CurrentState != engine.StateTownMenu {
+		t.Errorf("expected StateTownMenu when tavern not built")
+	}
+
+	// Build tavern level 1
+	eng.Village.Buildings[settlement.BuildingTavern] = 1
+	eng.Village.Treasury = 300
+	eng.Village.Rations = 20
+
+	// Press '5' to enter
+	model.Update(makeKeyMsg("5"))
+	if model.Engine.CurrentState != engine.StateTavernRecruit {
+		t.Fatalf("expected StateTavernRecruit, got %v", model.Engine.CurrentState)
+	}
+
+	// Tab switching
+	model.Update(makeKeyMsg("tab"))
+	if model.tavernTab != 1 {
+		t.Errorf("expected tavernTab 1, got %d", model.tavernTab)
+	}
+	// On Tab 1: order dining rest
+	eng.Player.Sanity = 50
+	eng.Player.MaxSanity = 100
+	model.Update(makeKeyMsg("enter"))
+	if eng.Player.Sanity <= 50 {
+		t.Errorf("expected sanity recovery after tavern meal")
+	}
+
+	// Switch back to Tab 0
+	model.Update(makeKeyMsg("1"))
+	if model.tavernTab != 0 {
+		t.Errorf("expected tavernTab 0, got %d", model.tavernTab)
+	}
+
+	// Hire first mercenary (Valen Rogue)
+	model.selectedTavernIdx = 0
+	model.Update(makeKeyMsg("enter"))
+	if len(eng.Player.Party) != 1 {
+		t.Fatalf("expected 1 hired companion, got %d", len(eng.Player.Party))
+	}
+
+	// Press enter again to dismiss
+	model.Update(makeKeyMsg("enter"))
+	if len(eng.Player.Party) != 0 {
+		t.Errorf("expected 0 companions after dismissal, got %d", len(eng.Player.Party))
+	}
+
+	// Press esc to return to town
+	model.Update(makeKeyMsg("esc"))
+	if model.Engine.CurrentState != engine.StateTownMenu {
+		t.Errorf("expected StateTownMenu after esc, got %v", model.Engine.CurrentState)
+	}
+}
+
+func TestAppModel_PotionUseInDungeonAndCombat(t *testing.T) {
+	eng := engine.NewGame("Explorer", "Oakhaven")
+	eng.Village.Rations = 10
+	_ = eng.StartExpedition(3)
+
+	exp := eng.ActiveExpedition
+	exp.Player.HP = 40
+	exp.Player.MaxHP = 100
+	exp.Player.AddPotion("salep_pemulih", 1)
+
+	model := NewAppModel(eng)
+
+	// 1. In dungeon exploration, press 'p' to drink potion
+	model.Update(makeKeyMsg("p"))
+	if exp.Player.HP != 75 { // 40 + 35 = 75
+		t.Errorf("expected player HP 75 after drinking salep_pemulih in dungeon, got %d", exp.Player.HP)
+	}
+
+	// 2. In combat, drink strength elixir
+	exp.Player.AddPotion("eliksir_kekuatan", 1)
+	room := exp.CurrentRoom()
+	room.Enemy = &combat.Enemy{
+		ID:         "rat",
+		Name:       "Tikus Raksasa",
+		HP:         50,
+		MaxHP:      50,
+		MinDamage:  0,
+		MaxDamage:  0,
+		Initiative: 2,
+	}
+	model.Engine.SwitchState(engine.StateCombatTurn)
+	exp.ActiveCombat = combat.NewCombatSession(exp.Player, room.Enemy)
+
+	model.Update(makeKeyMsg("p"))
+	if exp.ActiveCombat.TemporaryAtkBuff != 8 {
+		t.Errorf("expected TemporaryAtkBuff 8, got %d", exp.ActiveCombat.TemporaryAtkBuff)
+	}
+}
+

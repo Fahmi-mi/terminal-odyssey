@@ -5,10 +5,12 @@ import (
 	"strings"
 
 	"github.com/Fahmi-mi/terminal-odyssey/data"
+	"github.com/Fahmi-mi/terminal-odyssey/internal/alchemy"
 	"github.com/Fahmi-mi/terminal-odyssey/internal/character"
 	"github.com/Fahmi-mi/terminal-odyssey/internal/dungeon"
 	"github.com/Fahmi-mi/terminal-odyssey/internal/economy"
 	"github.com/Fahmi-mi/terminal-odyssey/internal/settlement"
+	"github.com/Fahmi-mi/terminal-odyssey/internal/tavern"
 )
 
 // GameState represents the current active screen or phase of the game
@@ -25,12 +27,14 @@ const (
 	StateDungeonExplore
 	StateCombatTurn
 	StateExpeditionSummary
+	StateAlchemyLab
 )
 
 // ExpeditionSummary stores the results of a finished dungeon run
 type ExpeditionSummary struct {
 	WasEvacuated    bool
 	GoldEarned      int
+	CompanionCut    int
 	LumberEarned    int
 	StoneEarned     int
 	EnemiesDefeated int
@@ -52,6 +56,8 @@ type Engine struct {
 
 	Market   *economy.MarketState
 	Caravans *economy.CaravanManager
+	Alchemy  *alchemy.AlchemyManager
+	Tavern   *tavern.TavernManager
 
 	ActiveExpedition      *dungeon.Expedition
 	LastExpeditionSummary *ExpeditionSummary
@@ -74,6 +80,8 @@ func NewGame(playerName, villageName string) *Engine {
 
 	market, _ := economy.NewMarketState()
 	caravans, _ := economy.NewCaravanManager()
+	alc, _ := alchemy.NewAlchemyManager()
+	tav, _ := tavern.NewTavernManager()
 
 	e := &Engine{
 		CurrentState:  StateTownMenu,
@@ -85,6 +93,8 @@ func NewGame(playerName, villageName string) *Engine {
 		Player:        character.NewDefaultPlayer(playerName),
 		Market:        market,
 		Caravans:      caravans,
+		Alchemy:       alc,
+		Tavern:        tav,
 		DailyLogs:     initialLogs,
 	}
 	return e
@@ -198,9 +208,24 @@ func (e *Engine) FinishExpedition(evacuated bool) {
 		roomsExplored = exp.CurrentRoomIdx + 1
 	}
 
+	totalCompanionCut := 0
+	if wasEvac {
+		for _, comp := range e.Player.Party {
+			if comp.IsAlive && comp.HP > 0 {
+				cut := (exp.GoldFound * comp.CutPercent) / 100
+				totalCompanionCut += cut
+			}
+		}
+	}
+	netGold := exp.GoldFound - totalCompanionCut
+	if netGold < 0 {
+		netGold = 0
+	}
+
 	summary := &ExpeditionSummary{
 		WasEvacuated:    wasEvac,
 		GoldEarned:      exp.GoldFound,
+		CompanionCut:    totalCompanionCut,
 		LumberEarned:    exp.LumberFound,
 		StoneEarned:     exp.StoneFound,
 		EnemiesDefeated: exp.EnemiesDefeated,
@@ -210,7 +235,7 @@ func (e *Engine) FinishExpedition(evacuated bool) {
 
 	if wasEvac {
 		exp.Evacuate()
-		e.Village.Treasury += exp.GoldFound
+		e.Village.Treasury += netGold
 		e.Village.Lumber += exp.LumberFound
 		e.Village.Stone += exp.StoneFound
 		// Return leftover rations to village store
@@ -227,9 +252,15 @@ func (e *Engine) FinishExpedition(evacuated bool) {
 			e.Village.Rations = maxR
 		}
 
-		e.DailyLogs = append([]string{
-			fmt.Sprintf("[+] Ekspedisi sukses: membawa pulang +%d Emas, +%d Kayu, +%d Batu", exp.GoldFound, exp.LumberFound, exp.StoneFound),
-		}, e.DailyLogs...)
+		if totalCompanionCut > 0 {
+			e.DailyLogs = append([]string{
+				fmt.Sprintf("[+] Ekspedisi sukses: membawa pulang +%d Emas (+%d kas desa, -%d upah rekan), +%d Kayu, +%d Batu", exp.GoldFound, netGold, totalCompanionCut, exp.LumberFound, exp.StoneFound),
+			}, e.DailyLogs...)
+		} else {
+			e.DailyLogs = append([]string{
+				fmt.Sprintf("[+] Ekspedisi sukses: membawa pulang +%d Emas, +%d Kayu, +%d Batu", exp.GoldFound, exp.LumberFound, exp.StoneFound),
+			}, e.DailyLogs...)
+		}
 	} else {
 		exp.HandleDefeat()
 		// 1 day passes for medical recovery
@@ -240,6 +271,22 @@ func (e *Engine) FinishExpedition(evacuated bool) {
 			"[!] Ekspedisi gagal: Karakter dievakuasi darurat ke desa dan seluruh jarahan hilang",
 		}, e.DailyLogs...)
 	}
+
+	// Handle fallen companions
+	var survivingParty []character.Companion
+	for _, c := range e.Player.Party {
+		if c.IsAlive && c.HP > 0 {
+			survivingParty = append(survivingParty, c)
+		} else {
+			if e.Tavern != nil {
+				_ = e.Tavern.Dismiss(c.ID)
+			}
+			e.DailyLogs = append([]string{
+				fmt.Sprintf("[!] Rekan %s gugur di dalam katakombe dan tidak kembali", c.Name),
+			}, e.DailyLogs...)
+		}
+	}
+	e.Player.Party = survivingParty
 
 	e.LastExpeditionSummary = summary
 	e.SwitchState(StateExpeditionSummary)
@@ -563,6 +610,194 @@ func (e *Engine) DispatchCaravan(routeID string) error {
 
 	e.SetAlert(fmt.Sprintf("Kafilah dagang menuju %s berhasil diberangkatkan (%d hari perjalanan)", route.Name, exp.TotalDays))
 	return nil
+}
+
+// BrewPotion crafts a potion using the alchemy lab and adds it to player pouch
+func (e *Engine) BrewPotion(recipeID string) error {
+	if e.Alchemy == nil {
+		return fmt.Errorf("sistem alkimia belum siap")
+	}
+
+	apothecaryLvl := e.Village.Buildings[settlement.BuildingApothecary]
+	if apothecaryLvl < 1 {
+		return fmt.Errorf("laboratorium Alkimia belum didirikan di desa")
+	}
+
+	result, err := e.Alchemy.Brew(
+		recipeID,
+		apothecaryLvl,
+		e.Village.Treasury,
+		e.Village.Commodities,
+		e.Village.Lumber,
+		e.Village.Stone,
+		e.Village.Rations,
+		e.Player.Stats.Ingenuity,
+	)
+	if err != nil {
+		return err
+	}
+
+	// Deduct costs
+	e.Village.Treasury -= result.Recipe.GoldCost
+	for ingID, amt := range result.Recipe.Ingredients {
+		switch ingID {
+		case "lumber":
+			e.Village.Lumber -= amt
+		case "stone":
+			e.Village.Stone -= amt
+		case "rations":
+			e.Village.Rations -= amt
+		default:
+			_ = e.Village.DeductCommodity(ingID, amt)
+		}
+	}
+
+	// Add to player pouch
+	e.Player.AddPotion(result.Recipe.ID, result.YieldAmount)
+	e.SetAlert(result.Log)
+	return nil
+}
+
+// DrinkPotionInTown consumes a potion from player pouch while in town
+func (e *Engine) DrinkPotionInTown(potionID string) error {
+	if e.Player.GetPotionCount(potionID) <= 0 {
+		return fmt.Errorf("anda tidak memiliki ramuan tersebut")
+	}
+
+	switch potionID {
+	case "salep_pemulih":
+		if e.Player.HP >= e.Player.MaxHP {
+			return fmt.Errorf("darah (HP) karakter sudah maksimal")
+		}
+		e.Player.UsePotion(potionID)
+		e.Player.HP += 45
+		if e.Player.HP > e.Player.MaxHP {
+			e.Player.HP = e.Player.MaxHP
+		}
+		e.SetAlert(fmt.Sprintf("Meminum Salep Pemulih (HP pulih ke %d/%d)", e.Player.HP, e.Player.MaxHP))
+
+	case "tonik_penenang":
+		if e.Player.Sanity >= e.Player.MaxSanity {
+			return fmt.Errorf("kewarasan karakter sudah maksimal")
+		}
+		e.Player.UsePotion(potionID)
+		e.Player.Sanity += 40
+		if e.Player.Sanity > e.Player.MaxSanity {
+			e.Player.Sanity = e.Player.MaxSanity
+		}
+		e.SetAlert(fmt.Sprintf("Meminum Tonik Penenang Jiwa (Kewarasan pulih ke %d/%d)", e.Player.Sanity, e.Player.MaxSanity))
+
+	case "penawar_racun":
+		e.Player.UsePotion(potionID)
+		e.Player.HP += 15
+		if e.Player.HP > e.Player.MaxHP {
+			e.Player.HP = e.Player.MaxHP
+		}
+		e.Player.Sanity += 15
+		if e.Player.Sanity > e.Player.MaxSanity {
+			e.Player.Sanity = e.Player.MaxSanity
+		}
+		e.SetAlert("Meminum Penawar Racun (+15 HP, +15 Sanity)")
+
+	case "minyak_obor":
+		return fmt.Errorf("minyak obor hanya dapat digunakan saat penjelajahan lorong katakombe")
+
+	case "eliksir_kekuatan":
+		return fmt.Errorf("eliksir kekuatan hanya dapat digunakan saat pertempuran aktif")
+
+	default:
+		return fmt.Errorf("ramuan tidak dikenal")
+	}
+	return nil
+}
+
+// HireCompanion recruits a companion from the tavern into the party
+func (e *Engine) HireCompanion(companionID string) error {
+	if e.Tavern == nil {
+		return fmt.Errorf("kedai Minum belum siap")
+	}
+
+	tavLvl := e.Village.Buildings[settlement.BuildingTavern]
+	if tavLvl < 1 {
+		return fmt.Errorf("kedai Minum belum didirikan di desa")
+	}
+
+	merc, err := e.Tavern.Hire(companionID, tavLvl, e.Village.Treasury, len(e.Player.Party))
+	if err != nil {
+		return err
+	}
+
+	e.Village.Treasury -= merc.Def.HireCost
+	e.Player.AddCompanion(character.Companion{
+		ID:         merc.Def.ID,
+		Name:       merc.Def.Name,
+		Role:       merc.Def.Role,
+		PerkDesc:   merc.Def.PerkDesc,
+		CutPercent: merc.Def.CutPercent,
+		HP:         merc.Def.HP,
+		MaxHP:      merc.Def.MaxHP,
+	})
+
+	e.SetAlert(fmt.Sprintf("%s (%s) bergabung dengan rombongan petualang", merc.Def.Name, merc.Def.RoleDisplay))
+	return nil
+}
+
+// DismissCompanion releases a companion from the active party
+func (e *Engine) DismissCompanion(companionID string) error {
+	if e.Tavern == nil {
+		return fmt.Errorf("kedai Minum belum siap")
+	}
+
+	if err := e.Tavern.Dismiss(companionID); err != nil {
+		return err
+	}
+	e.Player.RemoveCompanion(companionID)
+	e.SetAlert("Pendamping berhasil dikeluarkan dari rombongan")
+	return nil
+}
+
+// TavernRest provides sanity and HP recovery through dining at the tavern
+func (e *Engine) TavernRest() error {
+	if e.Tavern == nil {
+		return fmt.Errorf("kedai Minum belum siap")
+	}
+
+	tavLvl := e.Village.Buildings[settlement.BuildingTavern]
+	if tavLvl < 1 {
+		return fmt.Errorf("kedai Minum belum didirikan di desa")
+	}
+
+	if err := e.Tavern.CanRest(e.Village.Treasury, e.Village.Rations); err != nil {
+		return err
+	}
+
+	e.Village.Treasury -= 10
+	e.Village.Rations -= 1
+
+	oldSanity := e.Player.Sanity
+	e.Player.Sanity += 20
+	if e.Player.Sanity > e.Player.MaxSanity {
+		e.Player.Sanity = e.Player.MaxSanity
+	}
+
+	oldHP := e.Player.HP
+	e.Player.HP += 15
+	if e.Player.HP > e.Player.MaxHP {
+		e.Player.HP = e.Player.MaxHP
+	}
+
+	e.SetAlert(fmt.Sprintf("Menikmati santapan hangat di kedai (+%d Sanity, +%d HP)", e.Player.Sanity-oldSanity, e.Player.HP-oldHP))
+	return nil
+}
+
+// TavernRumor gets an atmospheric rumor from the tavern
+func (e *Engine) TavernRumor() string {
+	if e.Tavern == nil {
+		return "Suasana kedai minum tampak sepi"
+	}
+	rumor := e.Tavern.GetRandomRumor()
+	e.SetAlert(rumor)
+	return rumor
 }
 
 

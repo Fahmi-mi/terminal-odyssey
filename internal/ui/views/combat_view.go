@@ -80,10 +80,15 @@ func RenderCombatView(e *engine.Engine, width int) string {
 	// 3. Combat Controls Box
 	var controlsText string
 	if !session.IsOver {
-		controlsText = fmt.Sprintf("%s Serang  |  %s Bertahan  |  %s Makan Ransum  |  %s Kabur",
+		potionHint := ""
+		if session.Player.TotalPotions() > 0 {
+			potionHint = fmt.Sprintf("  |  %s Ramuan", styles.KeyBadge.Render("P"))
+		}
+		controlsText = fmt.Sprintf("%s Serang  |  %s Bertahan  |  %s Ransum%s  |  %s Kabur",
 			styles.KeyBadge.Render("1"),
 			styles.KeyBadge.Render("2"),
 			styles.KeyBadge.Render("3"),
+			potionHint,
 			styles.KeyBadge.Render("4"),
 		)
 	} else if session.Won {
