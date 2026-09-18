@@ -1,6 +1,7 @@
 # Binaries
 /odyssey
 /bin/
+/dist/
 *.exe
 *.exe~
 *.dll
