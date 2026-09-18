@@ -38,7 +38,7 @@ lint: vet
 
 clean:
 	@echo "==> Membersihkan direktori build dan file sementara..."
-	@rm -rf $(BUILD_DIR) coverage.out
+	@rm -rf $(BUILD_DIR) dist coverage.out
 	@echo "==> Direktori build telah dibersihkan"
 
 build-all:

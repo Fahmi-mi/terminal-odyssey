@@ -1,5 +1,9 @@
 # Terminal Odyssey
 
+[![CI](https://github.com/Fahmi-mi/terminal-odyssey/actions/workflows/ci.yml/badge.svg)](https://github.com/Fahmi-mi/terminal-odyssey/actions/workflows/ci.yml)
+[![Release](https://github.com/Fahmi-mi/terminal-odyssey/actions/workflows/release.yml/badge.svg)](https://github.com/Fahmi-mi/terminal-odyssey/actions/workflows/release.yml)
+[![Go Version](https://img.shields.io/github/go-mod/go-version/Fahmi-mi/terminal-odyssey)](https://golang.org)
+
 Terminal Odyssey adalah game Command-Line Interface (CLI) modern berbasis teks yang memadukan simulasi manajemen pemukiman (*settlement management*), sistem ekonomi dan perdagangan komoditas (*trading simulation*), serta penjelajahan bawah tanah naratif prosedural (*narrative roguelike dungeon crawler*).
 
 Game ini dibangun menggunakan bahasa pemrograman **Go (Golang)** dengan memanfaatkan framework Text User Interface (TUI) **Bubble Tea** dan sistem tata letak serta pewarnaan **Lip Gloss**.
@@ -25,6 +29,7 @@ Game ini dibangun menggunakan bahasa pemrograman **Go (Golang)** dengan memanfaa
   - [8. Boss Katakombe & Kondisi Kemenangan](#8-boss-katakombe--kondisi-kemenangan)
   - [9. Sistem Simpan & Muat Permainan](#9-sistem-simpan--muat-permainan)
 - [Struktur & Arsitektur Proyek](#struktur--arsitektur-proyek)
+- [Otomasi CI/CD & Rilis](#otomasi-cicd--rilis)
 - [Pengujian Kode](#pengujian-kode)
 - [Lisensi](#lisensi)
 
@@ -274,6 +279,10 @@ Proyek ini menggunakan arsitektur Go yang modular dan terstruktur rapi:
 
 ```
 terminal-odyssey/
+├── .github/
+│   └── workflows/          # Konfigurasi pipeline GitHub Actions (CI & CD Release)
+│       ├── ci.yml          # Verifikasi otomatis (vet, unit test, build test)
+│       └── release.yml     # Multi-platform cross-compilation & GitHub Release otomatis
 ├── cmd/
 │   └── odyssey/            # Entry point aplikasi utama (main.go)
 ├── data/                   # File data JSON dan parser loader bawaan (//go:embed)
@@ -306,6 +315,25 @@ terminal-odyssey/
 ├── go.mod                  # Manifes modul Go
 └── README.md               # Dokumentasi utama proyek
 ```
+
+---
+
+## Otomasi CI/CD & Rilis
+
+Repositori ini telah dilengkapi dengan pipeline otomatisasi GitHub Actions:
+
+1. **Continuous Integration (`.github/workflows/ci.yml`):**
+   - Berjalan secara otomatis khusus ketika membuat Pull Request dari branch `dev` menuju branch `main`.
+   - Menjalankan pemeriksaan integritas dependensi (`go mod verify`), analisis kode statis (`go vet ./...`), pengujian unit menyeluruh (`go test -v -count=1 ./...`), serta verifikasi kompilasi aplikasi sebelum digabungkan ke `main`.
+
+2. **Continuous Delivery / Release (`.github/workflows/release.yml`):**
+   - Terpicu secara otomatis ketika Anda membuat Git Tag rilis versi baru dengan awalan `v*` (contoh: `v1.0.0`).
+   - Melakukan *cross-compilation* mandiri (*standalone binary*) untuk berbagai arsitektur dan sistem operasi:
+     - Linux (`amd64`, `arm64`)
+     - Windows (`amd64` `.exe`)
+     - macOS (`Intel amd64`, `Apple Silicon arm64`)
+   - Menghasilkan berkas verifikasi `checksums.txt` (SHA256).
+   - Mempublikasikan seluruh biner rilis ke halaman resmi **GitHub Releases** beserta catatan rilis otomatis.
 
 ---
 
