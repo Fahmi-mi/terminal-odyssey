@@ -43,7 +43,7 @@ func RenderTownView(e *engine.Engine, width int) string {
 
 	leftLines := []string{
 		styles.SubtitleStyle.Render("[ WARGA & PEKERJA ]"),
-		fmt.Sprintf("  Populasi     : %s (%d Nganggur)", styles.ResourceVal.Render(fmt.Sprintf("%d/%d", v.Settlers, v.MaxSettlers())), v.UnassignedSettlers()),
+		fmt.Sprintf("  Populasi     : %s (%d Luang)", styles.ResourceVal.Render(fmt.Sprintf("%d/%d", v.Settlers, v.MaxSettlers())), v.UnassignedSettlers()),
 		fmt.Sprintf("  Petani       : %s", styles.ResourceFood.Render(fmt.Sprintf("%d Orang", v.Workers.Farmers))),
 		fmt.Sprintf("  Penebang     : %s", styles.ResourceWood.Render(fmt.Sprintf("%d Orang", v.Workers.Lumberjacks))),
 		fmt.Sprintf("  Penambang    : %s", styles.ResourceStone.Render(fmt.Sprintf("%d Orang", v.Workers.Miners))),
@@ -88,7 +88,7 @@ func RenderTownView(e *engine.Engine, width int) string {
 		fmt.Sprintf("  Nama      : %s", styles.ResourceVal.Render(playerName)),
 		fmt.Sprintf("  Darah (HP): %s", styles.ResourceVal.Render(fmt.Sprintf("%d / %d", p.HP, p.MaxHP))),
 		fmt.Sprintf("  Kewarasan : %s", styles.ResourceWood.Render(fmt.Sprintf("%d / %d", p.Sanity, p.MaxSanity))),
-		fmt.Sprintf("  Might: %-2d (+%d ATK)  Agi: %-2d (+%d)", p.Stats.Might, mightBonus, p.Stats.Agility, p.Stats.Agility),
+		fmt.Sprintf("  Might: %-2d (+%d ATK) Agi: %-2d (+%d)", p.Stats.Might, mightBonus, p.Stats.Agility, p.Stats.Agility),
 		fmt.Sprintf("  Resolve: %-2d (+%d HP)  Ing: %-2d", p.Stats.Resolve, (p.Stats.Resolve-10)*5, p.Stats.Ingenuity),
 		fmt.Sprintf("  Kapasitas : %d Slot Ransel", p.MaxBackpack),
 	}
@@ -105,13 +105,13 @@ func RenderTownView(e *engine.Engine, width int) string {
 	}
 
 	playerRightLines := []string{
-		styles.SubtitleStyle.Render("[ PERLENGKAPAN & SENJATA ]"),
+		styles.SubtitleStyle.Render("[ PERLENGKAPAN & ROMBONGAN ]"),
 		fmt.Sprintf("  Senjata   : %s", styles.DefenseStyle.Render(weaponName)),
 		fmt.Sprintf("  Tipe/ATK  : %s (%d-%d ATK)", w.WeaponType, w.BaseDamage[0]+mightBonus, w.BaseDamage[1]+mightBonus),
 		fmt.Sprintf("  Kritikal  : %.1f%% | Init: %d", critPct, totalInit),
 		fmt.Sprintf("  Ketahanan : %d/%d (%s)", w.Durability, w.MaxDura, w.SpecialAffix),
 		fmt.Sprintf("  Kondisi   : %s", styles.ResourceVal.Render(conditionStr)),
-		"",
+		fmt.Sprintf("  Rombongan : %d Rekan | %d Ramuan", len(p.Party), p.TotalPotions()),
 	}
 
 	playerLeftCol := lipgloss.NewStyle().Width(halfWidth).Render(strings.Join(playerLeftLines, "\n"))
@@ -129,12 +129,12 @@ func RenderTownView(e *engine.Engine, width int) string {
 		),
 	)
 
-	// 2. Daily Log Box (Prioritizes critical events & caps to at most 3 entries)
+	// 2. Daily Log Box (Capped to at most 2 priority entries for compact layout)
 	logTitle := "LAPORAN HARIAN:"
-	if len(e.DailyLogs) > 3 {
-		logTitle = fmt.Sprintf("LAPORAN HARIAN (PRIORITAS UTAMA - 3 DARI %d PERISTIWA):", len(e.DailyLogs))
+	if len(e.DailyLogs) > 2 {
+		logTitle = fmt.Sprintf("LAPORAN HARIAN (PRIORITAS - 2 DARI %d PERISTIWA):", len(e.DailyLogs))
 		if lipgloss.Width(logTitle) > contentWidth {
-			logTitle = "LAPORAN HARIAN (3 CATATAN UTAMA):"
+			logTitle = "LAPORAN HARIAN (2 CATATAN UTAMA):"
 		}
 	}
 	logHeader := styles.SubtitleStyle.Render(logTitle)
@@ -143,7 +143,7 @@ func RenderTownView(e *engine.Engine, width int) string {
 	if len(e.DailyLogs) == 0 {
 		logLines = append(logLines, styles.LogItemStyle.Render("Tidak ada peristiwa penting hari ini"))
 	} else {
-		displayLogs := selectPriorityDailyLogs(e.DailyLogs, 3)
+		displayLogs := selectPriorityDailyLogs(e.DailyLogs, 2)
 		for _, log := range displayLogs {
 			displayLog := log
 			maxLen := contentWidth - 3
@@ -163,26 +163,47 @@ func RenderTownView(e *engine.Engine, width int) string {
 		),
 	)
 
-	// 3. Action Menu Box
+	// 3. Action Menu Box (2-Column Grid Layout)
 	actionHeader := styles.TitleStyle.Render("TINDAKAN TERSEDIA:")
 
-	actions := []string{
-		fmt.Sprintf("%s %s", styles.KeyBadge.Render("1"), "Pasar & Perdagangan Komoditas"),
-		fmt.Sprintf("%s %s", styles.KeyBadge.Render("2"), "Pembangunan & Peningkatan Fasilitas"),
-		fmt.Sprintf("%s %s", styles.KeyBadge.Render("3"), "Bengkel Pandai Besi (Tempa Senjata & Zirah)"),
-		fmt.Sprintf("%s %s", styles.KeyBadge.Render("4"), "Pusat Latihan (Tingkatkan Stat Karakter)"),
-		fmt.Sprintf("%s %s", styles.KeyBadge.Render("5"), "Kedai Minum (Rekrut Pendamping & Rumor)"),
-		fmt.Sprintf("%s %s", styles.KeyBadge.Render("6"), "Siapkan Ekspedisi Katakombe Bawah Tanah"),
-		fmt.Sprintf("%s %s", styles.KeyBadge.Render("W"), "Alokasi & Penugasan Pekerja"),
-		fmt.Sprintf("%s %s", styles.KeyBadge.Render("D"), "Lewati Hari (Jalankan Siklus Produksi Harian)"),
-		fmt.Sprintf("%s %s", styles.KeyBadge.Render("Q"), "Keluar Permainan"),
+	type actionItem struct {
+		key, label string
+	}
+
+	leftActions := []actionItem{
+		{"1", "Pasar & Komoditas"},
+		{"2", "Pembangunan Fasilitas"},
+		{"3", "Bengkel Pandai Besi"},
+		{"4", "Pusat Latihan Karakter"},
+		{"5", "Kedai Minum (Pendamping)"},
+	}
+
+	rightActions := []actionItem{
+		{"6", "Ekspedisi Katakombe"},
+		{"7", "Laboratorium Alkimia"},
+		{"W", "Alokasi Pekerja"},
+		{"D", "Lewati Hari (Produksi)"},
+		{"Q", "Keluar Permainan"},
+	}
+
+	var actionRows []string
+	for i := 0; i < len(leftActions); i++ {
+		l := leftActions[i]
+		r := rightActions[i]
+
+		leftStr := fmt.Sprintf("%s %s", styles.KeyBadge.Render(l.key), l.label)
+		rightStr := fmt.Sprintf("%s %s", styles.KeyBadge.Render(r.key), r.label)
+
+		lCol := lipgloss.NewStyle().Width(halfWidth).Render(leftStr)
+		rCol := lipgloss.NewStyle().Width(rightWidth).Render(rightStr)
+		actionRows = append(actionRows, lipgloss.JoinHorizontal(lipgloss.Top, lCol, rCol))
 	}
 
 	actionBox := styles.BaseBox.Width(boxWidth).Render(
 		lipgloss.JoinVertical(
 			lipgloss.Left,
 			actionHeader,
-			strings.Join(actions, "\n"),
+			strings.Join(actionRows, "\n"),
 		),
 	)
 
@@ -192,12 +213,14 @@ func RenderTownView(e *engine.Engine, width int) string {
 		alertBox = styles.AlertSuccess.Render("[INFO] " + e.StatusAlert)
 	}
 
+	elements := []string{headerBox, logBox, actionBox}
+	if alertBox != "" {
+		elements = append(elements, alertBox)
+	}
+
 	return lipgloss.JoinVertical(
 		lipgloss.Left,
-		headerBox,
-		logBox,
-		actionBox,
-		alertBox,
+		elements...,
 	)
 }
 

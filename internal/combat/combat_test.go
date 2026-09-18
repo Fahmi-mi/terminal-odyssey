@@ -177,3 +177,88 @@ func TestWeaponDurabilityAndAffixes(t *testing.T) {
 	_ = preHP
 }
 
+func TestVanguardDamageMitigation(t *testing.T) {
+	p := character.NewDefaultPlayer("ShieldHero")
+	p.HP = 100
+	p.MaxHP = 100
+	p.AddCompanion(character.Companion{
+		ID:   "sir_gareth",
+		Name: "Sir Gareth",
+		Role: "Vanguard",
+	})
+
+	e := &Enemy{
+		ID:         "puncher",
+		Name:       "Puncher",
+		HP:         100,
+		MaxHP:      100,
+		MinDamage:  10,
+		MaxDamage:  10,
+		Initiative: 5,
+		Defense:    0,
+	}
+
+	session := NewCombatSession(p, e)
+	session.enemyCounterAttack()
+
+	// 10 dmg minus 30% (3) = 7 dmg taken
+	expectedHP := 100 - 7
+	if p.HP != expectedHP {
+		t.Errorf("expected HP %d after Vanguard mitigation, got %d", expectedHP, p.HP)
+	}
+}
+
+func TestPlayerDrinkPotionCombat(t *testing.T) {
+	p := character.NewDefaultPlayer("PotionMaster")
+	p.HP = 40
+	p.MaxHP = 100
+	p.Sanity = 50
+	p.MaxSanity = 100
+	p.AddPotion("salep_pemulih", 1)
+	p.AddPotion("eliksir_kekuatan", 1)
+	p.AddPotion("tonik_penenang", 1)
+
+	e := &Enemy{
+		ID:         "sloth",
+		Name:       "Sloth",
+		HP:         100,
+		MaxHP:      100,
+		MinDamage:  0,
+		MaxDamage:  0,
+		Initiative: 5,
+		Defense:    0,
+	}
+
+	session := NewCombatSession(p, e)
+
+	// Drink Salep Pemulih (+45 HP)
+	gain, err := session.PlayerDrinkPotion("salep_pemulih")
+	if err != nil {
+		t.Fatalf("unexpected potion error: %v", err)
+	}
+	if gain != 45 || p.HP != 85 {
+		t.Errorf("expected HP 85, got %d", p.HP)
+	}
+	if p.GetPotionCount("salep_pemulih") != 0 {
+		t.Errorf("expected 0 salep_pemulih remaining")
+	}
+
+	// Drink Eliksir Kekuatan (+8 ATK buff)
+	gainAtk, errAtk := session.PlayerDrinkPotion("eliksir_kekuatan")
+	if errAtk != nil {
+		t.Fatalf("unexpected elixir error: %v", errAtk)
+	}
+	if gainAtk != 8 || session.TemporaryAtkBuff != 8 {
+		t.Errorf("expected TemporaryAtkBuff 8, got %d", session.TemporaryAtkBuff)
+	}
+
+	// Drink Tonik Penenang (+40 Sanity)
+	gainSanity, errSanity := session.PlayerDrinkPotion("tonik_penenang")
+	if errSanity != nil {
+		t.Fatalf("unexpected tonic error: %v", errSanity)
+	}
+	if gainSanity != 40 || p.Sanity != 90 {
+		t.Errorf("expected Sanity 90, got %d", p.Sanity)
+	}
+}
+

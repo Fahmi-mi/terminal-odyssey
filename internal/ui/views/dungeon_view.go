@@ -53,7 +53,7 @@ func renderDungeonHeader(exp *dungeon.Expedition, titleText string, boxWidth, co
 		fmt.Sprintf("  Kewarasan : %s", styles.ResourceWood.Render(fmt.Sprintf("%d / %d", p.Sanity, p.MaxSanity))),
 		fmt.Sprintf("  Might: %-2d (+%d ATK)  Agi: %-2d (+%d)", p.Stats.Might, mightBonus, p.Stats.Agility, p.Stats.Agility),
 		fmt.Sprintf("  Resolve: %-2d (+%d HP)  Ing: %-2d", p.Stats.Resolve, (p.Stats.Resolve-10)*5, p.Stats.Ingenuity),
-		fmt.Sprintf("  Kapasitas : %d Slot Ransel", p.MaxBackpack),
+		fmt.Sprintf("  Rombongan : %d Rekan | %d Ramuan", len(p.Party), p.TotalPotions()),
 	}
 
 	rightLines := []string{
@@ -249,8 +249,11 @@ func RenderDungeonView(e *engine.Engine, width int) string {
 		controlActions = append(controlActions,
 			fmt.Sprintf("%s Makan", styles.KeyBadge.Render("M")),
 			fmt.Sprintf("%s Obor", styles.KeyBadge.Render("O")),
-			fmt.Sprintf("%s Mundur", styles.KeyBadge.Render("ESC")),
 		)
+		if exp.Player.TotalPotions() > 0 {
+			controlActions = append(controlActions, fmt.Sprintf("%s Ramuan", styles.KeyBadge.Render("P")))
+		}
+		controlActions = append(controlActions, fmt.Sprintf("%s Mundur", styles.KeyBadge.Render("ESC")))
 	} else {
 		// Room is resolved
 		if len(choices) >= 2 {
@@ -264,8 +267,11 @@ func RenderDungeonView(e *engine.Engine, width int) string {
 		controlActions = append(controlActions,
 			fmt.Sprintf("%s Makan", styles.KeyBadge.Render("M")),
 			fmt.Sprintf("%s Obor", styles.KeyBadge.Render("O")),
-			fmt.Sprintf("%s Mundur", styles.KeyBadge.Render("ESC")),
 		)
+		if exp.Player.TotalPotions() > 0 {
+			controlActions = append(controlActions, fmt.Sprintf("%s Ramuan", styles.KeyBadge.Render("P")))
+		}
+		controlActions = append(controlActions, fmt.Sprintf("%s Mundur", styles.KeyBadge.Render("ESC")))
 	}
 
 	controlsText := strings.Join(controlActions, " | ")

@@ -110,5 +110,49 @@ func TestLoadCaravanRouteDefs(t *testing.T) {
 	}
 }
 
+func TestLoadAlchemyRecipeDefs(t *testing.T) {
+	recipes, err := LoadAlchemyRecipeDefs()
+	if err != nil {
+		t.Fatalf("failed to load alchemy recipe defs: %v", err)
+	}
+	if len(recipes) < 5 {
+		t.Fatalf("expected at least 5 alchemy recipes, got %d", len(recipes))
+	}
+
+	foundHeal := false
+	for _, r := range recipes {
+		if r.ID == "salep_pemulih" {
+			foundHeal = true
+			if r.EffectType != "heal_hp" || r.EffectValue <= 0 {
+				t.Errorf("expected heal_hp with positive value, got %s: %d", r.EffectType, r.EffectValue)
+			}
+		}
+	}
+	if !foundHeal {
+		t.Errorf("expected salep_pemulih in alchemy recipes")
+	}
+}
+
+func TestLoadCompanionDefs(t *testing.T) {
+	comps, err := LoadCompanionDefs()
+	if err != nil {
+		t.Fatalf("failed to load companion defs: %v", err)
+	}
+	if len(comps) < 4 {
+		t.Fatalf("expected at least 4 companion defs, got %d", len(comps))
+	}
+
+	roles := make(map[string]bool)
+	for _, c := range comps {
+		roles[c.Role] = true
+	}
+	expectedRoles := []string{"Rogue", "Scholar", "Vanguard", "Acolyte"}
+	for _, role := range expectedRoles {
+		if !roles[role] {
+			t.Errorf("expected companion role %s to be present", role)
+		}
+	}
+}
+
 
 

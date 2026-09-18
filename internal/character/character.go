@@ -29,8 +29,10 @@ type Weapon struct {
 
 // Companion represents a recruited party member
 type Companion struct {
+	ID         string
 	Name       string
 	Role       string // Vanguard, Rogue, Scholar, Acolyte
+	PerkDesc   string
 	CutPercent int
 	HP         int
 	MaxHP      int
@@ -49,6 +51,7 @@ type Player struct {
 	EquippedWeapon Weapon
 	OwnedWeapons   []Weapon
 	Party          []Companion
+	Potions        map[string]int
 	Backpack       []string
 	MaxBackpack    int
 }
@@ -83,6 +86,7 @@ func NewPlayerFromScenario(p data.ScenarioPlayer) *Player {
 		MaxBackpack:    p.MaxBackpack,
 		Backpack:       make([]string, 0),
 		Party:          make([]Companion, 0),
+		Potions:        make(map[string]int),
 		EquippedWeapon: starter,
 		OwnedWeapons:   []Weapon{starter},
 	}
@@ -250,4 +254,82 @@ func (p *Player) UpgradeStat(statName string, cap int) (int, error) {
 		return 0, fmt.Errorf("nama atribut %s tidak valid", statName)
 	}
 }
+
+// AddPotion adds potions to player pouch
+func (p *Player) AddPotion(id string, amount int) {
+	if p.Potions == nil {
+		p.Potions = make(map[string]int)
+	}
+	p.Potions[id] += amount
+}
+
+// UsePotion decrements potion count if available
+func (p *Player) UsePotion(id string) bool {
+	if p.Potions == nil || p.Potions[id] <= 0 {
+		return false
+	}
+	p.Potions[id]--
+	if p.Potions[id] <= 0 {
+		delete(p.Potions, id)
+	}
+	return true
+}
+
+// GetPotionCount returns count of specific potion
+func (p *Player) GetPotionCount(id string) int {
+	if p.Potions == nil {
+		return 0
+	}
+	return p.Potions[id]
+}
+
+// TotalPotions returns the sum of all potions in pouch
+func (p *Player) TotalPotions() int {
+	total := 0
+	for _, cnt := range p.Potions {
+		total += cnt
+	}
+	return total
+}
+
+// HasCompanionRole checks if party has a living companion with the given role
+func (p *Player) HasCompanionRole(role string) bool {
+	for _, c := range p.Party {
+		if c.Role == role && c.IsAlive {
+			return true
+		}
+	}
+	return false
+}
+
+// GetCompanion returns the living companion with the given role
+func (p *Player) GetCompanion(role string) *Companion {
+	for i := range p.Party {
+		if p.Party[i].Role == role && p.Party[i].IsAlive {
+			return &p.Party[i]
+		}
+	}
+	return nil
+}
+
+// AddCompanion adds a companion to the party
+func (p *Player) AddCompanion(c Companion) {
+	c.IsAlive = true
+	if c.MaxHP > 0 && c.HP <= 0 {
+		c.HP = c.MaxHP
+	}
+	p.Party = append(p.Party, c)
+}
+
+// RemoveCompanion removes a companion by ID from the party
+func (p *Player) RemoveCompanion(id string) bool {
+	for i, c := range p.Party {
+		if c.ID == id {
+			p.Party = append(p.Party[:i], p.Party[i+1:]...)
+			return true
+		}
+	}
+	return false
+}
+
 

@@ -31,23 +31,30 @@ type AppModel struct {
 	selectedMarketIdx int
 	marketTab         int
 	selectedRouteIdx  int
+
+	selectedAlchemyIdx int
+	selectedTavernIdx  int
+	tavernTab          int
 }
 
 // NewAppModel creates a fresh TUI model
 func NewAppModel(eng *engine.Engine) *AppModel {
 	return &AppModel{
-		Engine:            eng,
-		width:             80,
-		height:            24,
-		selectedWorkerIdx: 0,
-		selectedBuildIdx:  0,
-		selectedRecipeIdx: 0,
-		selectedStatIdx:   0,
-		blacksmithTab:     0,
-		selectedWeaponIdx: 0,
-		selectedMarketIdx: 0,
-		marketTab:         0,
-		selectedRouteIdx:  0,
+		Engine:             eng,
+		width:              80,
+		height:             24,
+		selectedWorkerIdx:  0,
+		selectedBuildIdx:   0,
+		selectedRecipeIdx:  0,
+		selectedStatIdx:    0,
+		blacksmithTab:      0,
+		selectedWeaponIdx:  0,
+		selectedMarketIdx:  0,
+		marketTab:          0,
+		selectedRouteIdx:   0,
+		selectedAlchemyIdx: 0,
+		selectedTavernIdx:  0,
+		tavernTab:          0,
 	}
 }
 
@@ -83,6 +90,10 @@ func (m *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m.updateTrainingGrounds(msg)
 		case engine.StateMarketTrade:
 			return m.updateMarketTrade(msg)
+		case engine.StateAlchemyLab:
+			return m.updateAlchemyLab(msg)
+		case engine.StateTavernRecruit:
+			return m.updateTavernRecruit(msg)
 		case engine.StateDungeonExplore:
 			return m.updateDungeonExplore(msg)
 		case engine.StateCombatTurn:
@@ -125,7 +136,11 @@ func (m *AppModel) updateTownMenu(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.Engine.SwitchState(engine.StateTrainingGrounds)
 		}
 	case "5":
-		m.Engine.SetAlert("Kedai Minum belum memiliki rumor baru hari ini")
+		if m.Engine.Village.Buildings[settlement.BuildingTavern] < 1 {
+			m.Engine.SetAlert("Kedai Minum belum didirikan! Bangun di menu [2] Pembangunan")
+		} else {
+			m.Engine.SwitchState(engine.StateTavernRecruit)
+		}
 	case "6":
 		rationsToTake := 3
 		if m.Engine.Village.Rations < rationsToTake {
@@ -133,6 +148,12 @@ func (m *AppModel) updateTownMenu(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		if err := m.Engine.StartExpedition(rationsToTake); err != nil {
 			m.Engine.SetAlert(err.Error())
+		}
+	case "7":
+		if m.Engine.Village.Buildings[settlement.BuildingApothecary] < 1 {
+			m.Engine.SetAlert("Laboratorium Alkimia belum didirikan! Bangun di menu [2] Pembangunan")
+		} else {
+			m.Engine.SwitchState(engine.StateAlchemyLab)
 		}
 	}
 	return m, nil
@@ -235,6 +256,8 @@ func (m *AppModel) updateDungeonExplore(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 					m.Engine.SetAlert(err.Error())
 				}
 			}
+		case "p", "P":
+			m.usePotionInDungeon()
 		}
 		return m, nil
 	}
@@ -250,6 +273,8 @@ func (m *AppModel) updateDungeonExplore(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			if _, err := exp.ConsumeRation(); err != nil {
 				m.Engine.SetAlert(err.Error())
 			}
+		case "p", "P":
+			m.usePotionInDungeon()
 		case "esc":
 			m.Engine.FinishExpedition(true)
 		}
@@ -278,6 +303,8 @@ func (m *AppModel) updateDungeonExplore(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			if err := exp.ConsumeTorch(); err != nil {
 				m.Engine.SetAlert(err.Error())
 			}
+		case "p", "P":
+			m.usePotionInDungeon()
 		case "esc":
 			m.Engine.FinishExpedition(true)
 		}
@@ -303,6 +330,8 @@ func (m *AppModel) updateDungeonExplore(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			if err := exp.ConsumeTorch(); err != nil {
 				m.Engine.SetAlert(err.Error())
 			}
+		case "p", "P":
+			m.usePotionInDungeon()
 		case "esc":
 			m.Engine.FinishExpedition(true)
 		}
@@ -323,10 +352,52 @@ func (m *AppModel) updateDungeonExplore(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if err := exp.ConsumeTorch(); err != nil {
 			m.Engine.SetAlert(err.Error())
 		}
+	case "p", "P":
+		m.usePotionInDungeon()
 	case "esc":
 		m.Engine.FinishExpedition(true)
 	}
 	return m, nil
+}
+
+func (m *AppModel) usePotionInDungeon() {
+	exp := m.Engine.ActiveExpedition
+	if exp == nil {
+		return
+	}
+	p := m.Engine.Player
+	if p.TotalPotions() <= 0 {
+		m.Engine.SetAlert("Kantong ramuan Anda kosong")
+		return
+	}
+
+	var targetPotion string
+	if p.HP < p.MaxHP && p.GetPotionCount("salep_pemulih") > 0 {
+		targetPotion = "salep_pemulih"
+	} else if exp.Torch < 65 && p.GetPotionCount("minyak_obor") > 0 {
+		targetPotion = "minyak_obor"
+	} else if p.Sanity < p.MaxSanity && p.GetPotionCount("tonik_penenang") > 0 {
+		targetPotion = "tonik_penenang"
+	} else if p.GetPotionCount("penawar_racun") > 0 {
+		targetPotion = "penawar_racun"
+	} else {
+		order := []string{"salep_pemulih", "minyak_obor", "tonik_penenang", "penawar_racun", "eliksir_kekuatan"}
+		for _, pot := range order {
+			if p.GetPotionCount(pot) > 0 {
+				targetPotion = pot
+				break
+			}
+		}
+	}
+
+	if targetPotion == "" {
+		m.Engine.SetAlert("Tidak ada ramuan yang dapat digunakan saat ini")
+		return
+	}
+
+	if _, err := exp.ConsumePotion(targetPotion); err != nil {
+		m.Engine.SetAlert(err.Error())
+	}
 }
 
 func (m *AppModel) updateCombatTurn(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
@@ -386,6 +457,42 @@ func (m *AppModel) updateCombatTurn(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if session.Player.HP <= 0 {
 			session.IsOver = true
 			session.Won = false
+		}
+	case "p", "P":
+		p := m.Engine.Player
+		if p.TotalPotions() <= 0 {
+			m.Engine.SetAlert("Kantong ramuan Anda kosong")
+		} else {
+			var targetPotion string
+			if p.HP < p.MaxHP && p.GetPotionCount("salep_pemulih") > 0 {
+				targetPotion = "salep_pemulih"
+			} else if p.GetPotionCount("eliksir_kekuatan") > 0 && session.TemporaryAtkBuff == 0 {
+				targetPotion = "eliksir_kekuatan"
+			} else if p.Sanity < p.MaxSanity && p.GetPotionCount("tonik_penenang") > 0 {
+				targetPotion = "tonik_penenang"
+			} else if p.GetPotionCount("penawar_racun") > 0 {
+				targetPotion = "penawar_racun"
+			} else {
+				order := []string{"salep_pemulih", "eliksir_kekuatan", "tonik_penenang", "penawar_racun"}
+				for _, pot := range order {
+					if p.GetPotionCount(pot) > 0 {
+						targetPotion = pot
+						break
+					}
+				}
+			}
+
+			if targetPotion == "" {
+				m.Engine.SetAlert("Tidak ada ramuan tempur yang dapat diminum saat ini")
+			} else {
+				if _, err := session.PlayerDrinkPotion(targetPotion); err != nil {
+					m.Engine.SetAlert(err.Error())
+				}
+				if session.Player.HP <= 0 {
+					session.IsOver = true
+					session.Won = false
+				}
+			}
 		}
 	}
 
@@ -613,6 +720,110 @@ func (m *AppModel) updateMarketTrade(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
+func (m *AppModel) updateAlchemyLab(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	if m.Engine.Alchemy == nil {
+		m.Engine.SwitchState(engine.StateTownMenu)
+		return m, nil
+	}
+
+	recipes := m.Engine.Alchemy.Recipes
+	maxRecipes := len(recipes)
+
+	switch msg.String() {
+	case "esc":
+		m.Engine.SwitchState(engine.StateTownMenu)
+	case "up":
+		if m.selectedAlchemyIdx > 0 {
+			m.selectedAlchemyIdx--
+		} else if maxRecipes > 0 {
+			m.selectedAlchemyIdx = maxRecipes - 1
+		}
+		m.Engine.ClearAlert()
+	case "down":
+		if m.selectedAlchemyIdx < maxRecipes-1 {
+			m.selectedAlchemyIdx++
+		} else {
+			m.selectedAlchemyIdx = 0
+		}
+		m.Engine.ClearAlert()
+	case "enter":
+		if maxRecipes > 0 && m.selectedAlchemyIdx < maxRecipes {
+			sel := recipes[m.selectedAlchemyIdx]
+			if err := m.Engine.BrewPotion(sel.ID); err != nil {
+				m.Engine.SetAlert(err.Error())
+			}
+		}
+	}
+	return m, nil
+}
+
+func (m *AppModel) updateTavernRecruit(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	if m.Engine.Tavern == nil {
+		m.Engine.SwitchState(engine.StateTownMenu)
+		return m, nil
+	}
+
+	mercs := m.Engine.Tavern.Mercenaries
+	maxMercs := len(mercs)
+
+	switch msg.String() {
+	case "esc":
+		m.Engine.SwitchState(engine.StateTownMenu)
+	case "tab":
+		m.tavernTab = 1 - m.tavernTab
+		m.Engine.ClearAlert()
+	case "1":
+		m.tavernTab = 0
+		m.Engine.ClearAlert()
+	case "2":
+		m.tavernTab = 1
+		m.Engine.ClearAlert()
+	}
+
+	if m.tavernTab == 0 {
+		switch msg.String() {
+		case "up":
+			if m.selectedTavernIdx > 0 {
+				m.selectedTavernIdx--
+			} else if maxMercs > 0 {
+				m.selectedTavernIdx = maxMercs - 1
+			}
+			m.Engine.ClearAlert()
+		case "down":
+			if m.selectedTavernIdx < maxMercs-1 {
+				m.selectedTavernIdx++
+			} else {
+				m.selectedTavernIdx = 0
+			}
+			m.Engine.ClearAlert()
+		case "enter":
+			if maxMercs > 0 && m.selectedTavernIdx < maxMercs {
+				sel := mercs[m.selectedTavernIdx]
+				if sel.IsHired {
+					if err := m.Engine.DismissCompanion(sel.Def.ID); err != nil {
+						m.Engine.SetAlert(err.Error())
+					}
+				} else {
+					if err := m.Engine.HireCompanion(sel.Def.ID); err != nil {
+						m.Engine.SetAlert(err.Error())
+					}
+				}
+			}
+		}
+	} else {
+		switch msg.String() {
+		case "enter", "r", "R":
+			if err := m.Engine.TavernRest(); err != nil {
+				m.Engine.SetAlert(err.Error())
+			}
+		case "m", "M":
+			m.Engine.TavernRumor()
+		}
+	}
+
+	return m, nil
+}
+
 func (m *AppModel) updateExpeditionSummary(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
 	case "enter":
@@ -636,6 +847,10 @@ func (m *AppModel) View() string {
 		return views.RenderTrainingView(m.Engine, m.selectedStatIdx, m.width)
 	case engine.StateMarketTrade:
 		return views.RenderMarketView(m.Engine, m.selectedMarketIdx, m.marketTab, m.selectedRouteIdx, m.width)
+	case engine.StateAlchemyLab:
+		return views.RenderAlchemyView(m.Engine, m.selectedAlchemyIdx, m.width)
+	case engine.StateTavernRecruit:
+		return views.RenderTavernView(m.Engine, m.selectedTavernIdx, m.tavernTab, m.width)
 	case engine.StateDungeonExplore:
 		return views.RenderDungeonView(m.Engine, m.width)
 	case engine.StateCombatTurn:

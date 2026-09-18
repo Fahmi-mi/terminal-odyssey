@@ -57,14 +57,15 @@ func NewEnemyByID(id string) (*Enemy, error) {
 
 // CombatSession manages a turn-based battle between player and enemy
 type CombatSession struct {
-	Player          *character.Player
-	Enemy           *Enemy
-	PlayerDefending bool
-	TurnCount       int
-	IsOver          bool
-	Won             bool
-	Fled            bool
-	Logs            []string
+	Player           *character.Player
+	Enemy            *Enemy
+	PlayerDefending  bool
+	TemporaryAtkBuff int
+	TurnCount        int
+	IsOver           bool
+	Won              bool
+	Fled             bool
+	Logs             []string
 }
 
 // NewCombatSession starts a new battle and logs initial engagement
@@ -118,7 +119,7 @@ func (s *CombatSession) PlayerAttack() (int, bool, error) {
 	critChance := w.CritRate + float64(s.Player.Stats.Agility)*0.005
 	isCrit := rand.Float64() < critChance
 
-	total := rawDmg + mightBonus
+	total := rawDmg + mightBonus + s.TemporaryAtkBuff
 
 	// Affix checks
 	if strings.Contains(w.SpecialAffix, "Tempered") {
@@ -281,19 +282,102 @@ func (s *CombatSession) enemyCounterAttack() {
 		if dmg < 1 {
 			dmg = 1
 		}
-		s.addLog(fmt.Sprintf("[-] Pertahanan Anda meredam serangan %s (-%d HP)", s.Enemy.Name, dmg))
 		s.PlayerDefending = false
-	} else {
-		s.addLog(fmt.Sprintf("[-] %s menyerang Anda (-%d HP)", s.Enemy.Name, dmg))
+		s.addLog(fmt.Sprintf("[-] Pertahanan Anda meredam serangan %s", s.Enemy.Name))
+	}
+
+	// Vanguard companion damage mitigation (30% absorption)
+	if s.Player.HasCompanionRole("Vanguard") && dmg > 0 {
+		mitigation := int(float64(dmg) * 0.30)
+		if mitigation > 0 {
+			dmg -= mitigation
+			s.addLog(fmt.Sprintf("[*] Pendamping Vanguard menahan gempuran musuh (-%d kerusakan)", mitigation))
+		}
+	}
+	if dmg < 0 {
+		dmg = 0
 	}
 
 	s.Player.HP -= dmg
+	s.addLog(fmt.Sprintf("[-] %s menyerang Anda (-%d HP)", s.Enemy.Name, dmg))
+
 	if s.Player.HP <= 0 {
 		s.Player.HP = 0
 		s.IsOver = true
 		s.Won = false
 		s.addLog(fmt.Sprintf("[!] Tubuh Anda tumbang tak sadarkan diri akibat serangan %s", s.Enemy.Name))
 	}
+}
+
+// PlayerDrinkPotion consumes a potion during combat and advances turn
+func (s *CombatSession) PlayerDrinkPotion(potionID string) (int, error) {
+	if s.IsOver {
+		return 0, fmt.Errorf("pertempuran sudah berakhir")
+	}
+	if s.Player.GetPotionCount(potionID) <= 0 {
+		return 0, fmt.Errorf("anda tidak memiliki ramuan tersebut")
+	}
+
+	effectVal := 0
+	switch potionID {
+	case "salep_pemulih":
+		if s.Player.HP >= s.Player.MaxHP {
+			return 0, fmt.Errorf("darah (HP) karakter sudah maksimal")
+		}
+		s.Player.UsePotion(potionID)
+		healAmount := 45
+		oldHP := s.Player.HP
+		s.Player.HP += healAmount
+		if s.Player.HP > s.Player.MaxHP {
+			s.Player.HP = s.Player.MaxHP
+		}
+		effectVal = s.Player.HP - oldHP
+		s.addLog(fmt.Sprintf("[+] Mengoleskan Salep Pemulih (+%d HP, Darah: %d/%d)", effectVal, s.Player.HP, s.Player.MaxHP))
+
+	case "tonik_penenang":
+		if s.Player.Sanity >= s.Player.MaxSanity {
+			return 0, fmt.Errorf("kewarasan karakter sudah maksimal")
+		}
+		s.Player.UsePotion(potionID)
+		gainSanity := 40
+		oldSanity := s.Player.Sanity
+		s.Player.Sanity += gainSanity
+		if s.Player.Sanity > s.Player.MaxSanity {
+			s.Player.Sanity = s.Player.MaxSanity
+		}
+		effectVal = s.Player.Sanity - oldSanity
+		s.addLog(fmt.Sprintf("[+] Meminum Tonik Penenang Jiwa (+%d Sanity, Kewarasan: %d/%d)", effectVal, s.Player.Sanity, s.Player.MaxSanity))
+
+	case "penawar_racun":
+		s.Player.UsePotion(potionID)
+		healAmount := 15
+		s.Player.HP += healAmount
+		if s.Player.HP > s.Player.MaxHP {
+			s.Player.HP = s.Player.MaxHP
+		}
+		s.Player.Sanity += 15
+		if s.Player.Sanity > s.Player.MaxSanity {
+			s.Player.Sanity = s.Player.MaxSanity
+		}
+		effectVal = healAmount
+		s.addLog(fmt.Sprintf("[+] Menenggak Penawar Racun (+%d HP, +15 Sanity)", healAmount))
+
+	case "eliksir_kekuatan":
+		s.Player.UsePotion(potionID)
+		s.TemporaryAtkBuff += 8
+		effectVal = 8
+		s.addLog("[+] Menenggak Eliksir Kekuatan Tempur (Kekuatan tebasan bertambah +8 ATK)")
+
+	case "minyak_obor":
+		return 0, fmt.Errorf("minyak obor hanya dapat digunakan saat penjelajahan lorong katakombe")
+
+	default:
+		return 0, fmt.Errorf("ramuan tidak dikenal")
+	}
+
+	s.enemyCounterAttack()
+	s.TurnCount++
+	return effectVal, nil
 }
 
 // addLog keeps the combat log to the most recent entries
