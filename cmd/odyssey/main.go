@@ -12,6 +12,7 @@ import (
 
 func main() {
 	gameEngine := engine.NewGame("Sang Petualang", "Oakhaven")
+	gameEngine.CurrentState = engine.StateTitleScreen
 	appModel := ui.NewAppModel(gameEngine)
 
 	p := tea.NewProgram(appModel, tea.WithAltScreen())

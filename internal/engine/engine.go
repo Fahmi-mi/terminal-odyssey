@@ -10,6 +10,7 @@ import (
 	"github.com/Fahmi-mi/terminal-odyssey/internal/dungeon"
 	"github.com/Fahmi-mi/terminal-odyssey/internal/economy"
 	"github.com/Fahmi-mi/terminal-odyssey/internal/settlement"
+	"github.com/Fahmi-mi/terminal-odyssey/internal/siege"
 	"github.com/Fahmi-mi/terminal-odyssey/internal/tavern"
 )
 
@@ -28,6 +29,11 @@ const (
 	StateCombatTurn
 	StateExpeditionSummary
 	StateAlchemyLab
+	StateTitleScreen
+	StateSaveMenu
+	StateLoadMenu
+	StateSiegeReport
+	StateVictoryScreen
 )
 
 // ExpeditionSummary stores the results of a finished dungeon run
@@ -58,9 +64,14 @@ type Engine struct {
 	Caravans *economy.CaravanManager
 	Alchemy  *alchemy.AlchemyManager
 	Tavern   *tavern.TavernManager
+	Siege    *siege.SiegeManager
 
 	ActiveExpedition      *dungeon.Expedition
 	LastExpeditionSummary *ExpeditionSummary
+
+	BossDefeated        bool
+	HasWonGame          bool
+	VictoryAcknowledged bool
 
 	DailyLogs   []string
 	StatusAlert string // temporary flash message (e.g. error or success info)
@@ -82,6 +93,7 @@ func NewGame(playerName, villageName string) *Engine {
 	caravans, _ := economy.NewCaravanManager()
 	alc, _ := alchemy.NewAlchemyManager()
 	tav, _ := tavern.NewTavernManager()
+	sm, _ := siege.NewSiegeManager()
 
 	e := &Engine{
 		CurrentState:  StateTownMenu,
@@ -95,6 +107,7 @@ func NewGame(playerName, villageName string) *Engine {
 		Caravans:      caravans,
 		Alchemy:       alc,
 		Tavern:        tav,
+		Siege:         sm,
 		DailyLogs:     initialLogs,
 	}
 	return e
@@ -145,9 +158,34 @@ func (e *Engine) PassDay() settlement.DailyResult {
 		}
 	}
 
+	// Siege raid check
+	var siegeTriggered bool
+	if e.Siege != nil {
+		threat, _ := e.Siege.CalculateThreat(e.Village, e.DayCounter)
+		if e.Siege.ShouldTriggerSiege(threat, e.DayCounter) {
+			raider := e.Siege.SelectRaider(threat)
+			if raider != nil {
+				res := e.Siege.ResolveSiege(*raider, e.Village, e.DayCounter)
+				simResult.Logs = append([]string{res.Log}, simResult.Logs...)
+				siegeTriggered = true
+			}
+		}
+	}
+
 	// Update daily logs with the latest results
 	e.DailyLogs = simResult.Logs
 	e.StatusAlert = fmt.Sprintf("Hari ke-%d telah berlalu", e.DayCounter)
+
+	if siegeTriggered {
+		e.SwitchState(StateSiegeReport)
+		return simResult
+	}
+
+	if e.CheckVictoryCondition() {
+		e.SwitchState(StateVictoryScreen)
+		return simResult
+	}
+
 	return simResult
 }
 
@@ -234,6 +272,9 @@ func (e *Engine) FinishExpedition(evacuated bool) {
 	}
 
 	if wasEvac {
+		if exp.BossDefeated {
+			e.BossDefeated = true
+		}
 		exp.Evacuate()
 		e.Village.Treasury += netGold
 		e.Village.Lumber += exp.LumberFound
@@ -289,6 +330,10 @@ func (e *Engine) FinishExpedition(evacuated bool) {
 	e.Player.Party = survivingParty
 
 	e.LastExpeditionSummary = summary
+	if e.CheckVictoryCondition() {
+		e.SwitchState(StateVictoryScreen)
+		return
+	}
 	e.SwitchState(StateExpeditionSummary)
 }
 
@@ -800,5 +845,58 @@ func (e *Engine) TavernRumor() string {
 	return rumor
 }
 
+// CheckVictoryCondition checks whether player has met the endgame triumph requirements
+func (e *Engine) CheckVictoryCondition() bool {
+	if e.VictoryAcknowledged {
+		return false
+	}
+	if e.Village == nil {
+		return false
+	}
+	townHallLvl := e.Village.Buildings[settlement.BuildingTownHall]
+	e.Village.RecalculateDefense()
+	if e.BossDefeated && townHallLvl >= 3 && e.Village.DefenseVal >= 70 {
+		e.HasWonGame = true
+		return true
+	}
+	return false
+}
 
+// AcknowledgeVictory flags the victory event as viewed and returns to sandbox town mode
+func (e *Engine) AcknowledgeVictory() {
+	e.VictoryAcknowledged = true
+	e.SwitchState(StateTownMenu)
+}
 
+// ThreatInfo returns the current settlement threat score and classification
+func (e *Engine) ThreatInfo() (int, string) {
+	if e.Siege == nil || e.Village == nil {
+		return 0, "Aman"
+	}
+	return e.Siege.CalculateThreat(e.Village, e.DayCounter)
+}
+
+// TriggerDirectSiege initiates a specific siege attack immediately
+func (e *Engine) TriggerDirectSiege(raiderID string) *siege.SiegeResult {
+	if e.Siege == nil || e.Village == nil {
+		return nil
+	}
+	var target *data.RaiderGroupDef
+	for _, r := range e.Siege.Raiders {
+		if r.ID == raiderID {
+			target = &r
+			break
+		}
+	}
+	if target == nil && len(e.Siege.Raiders) > 0 {
+		target = &e.Siege.Raiders[0]
+	}
+	if target == nil {
+		return nil
+	}
+
+	res := e.Siege.ResolveSiege(*target, e.Village, e.DayCounter)
+	e.DailyLogs = append([]string{res.Log}, e.DailyLogs...)
+	e.SwitchState(StateSiegeReport)
+	return res
+}

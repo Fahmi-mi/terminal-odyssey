@@ -70,5 +70,17 @@
     "defense": 6,
     "gold_reward": 90,
     "exp_reward": 50
+  },
+  {
+    "id": "abyssal_overlord",
+    "name": "Penguasa Abyssal Katakombe",
+    "description": "Entitas kegelapan purba bermahkota tanduk api hitam yang menguasai inti katakombe",
+    "max_hp": 130,
+    "min_damage": 14,
+    "max_damage": 22,
+    "initiative": 10,
+    "defense": 8,
+    "gold_reward": 250,
+    "exp_reward": 120
   }
 ]

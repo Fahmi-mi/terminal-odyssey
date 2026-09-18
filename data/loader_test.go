@@ -154,5 +154,25 @@ func TestLoadCompanionDefs(t *testing.T) {
 	}
 }
 
+func TestLoadRaiderDefs(t *testing.T) {
+	raiders, err := LoadRaiderDefs()
+	if err != nil {
+		t.Fatalf("failed to load raider defs: %v", err)
+	}
+	if len(raiders) < 4 {
+		t.Fatalf("expected at least 4 raider defs, got %d", len(raiders))
+	}
 
-
+	foundBandit := false
+	for _, r := range raiders {
+		if r.ID == "bandit_raiders" {
+			foundBandit = true
+			if r.BaseAssaultPower <= 0 {
+				t.Errorf("expected positive assault power, got %d", r.BaseAssaultPower)
+			}
+		}
+	}
+	if !foundBandit {
+		t.Errorf("expected bandit_raiders in raider defs")
+	}
+}

@@ -40,6 +40,8 @@ const (
 	BuildingApothecary     = "Laboratorium Alkimia"
 	BuildingTavern         = "Kedai Minum"
 	BuildingCaravanPost    = "Pos Kafilah"
+	BuildingWatchtower     = "Menara Pengawas"
+	BuildingFortification  = "Benteng Pertahanan"
 )
 
 // BuildingInfo holds details and upgrade costs for a building
@@ -186,7 +188,9 @@ func (s *Settlement) RecalculateDefense() {
 	base := 10
 	militiaBonus := s.Workers.Militia * 15
 	townHallBonus := s.Buildings[BuildingTownHall] * 10
-	s.DefenseVal = base + militiaBonus + townHallBonus
+	towerBonus := s.Buildings[BuildingWatchtower] * 20
+	fortBonus := s.Buildings[BuildingFortification] * 30
+	s.DefenseVal = base + militiaBonus + townHallBonus + towerBonus + fortBonus
 }
 
 // GetCommodityStock returns current count of a commodity in village store

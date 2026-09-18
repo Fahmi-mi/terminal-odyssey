@@ -10,6 +10,7 @@ import (
 	"github.com/Fahmi-mi/terminal-odyssey/internal/combat"
 	"github.com/Fahmi-mi/terminal-odyssey/internal/dungeon"
 	"github.com/Fahmi-mi/terminal-odyssey/internal/engine"
+	"github.com/Fahmi-mi/terminal-odyssey/internal/save"
 	"github.com/Fahmi-mi/terminal-odyssey/internal/settlement"
 	"github.com/Fahmi-mi/terminal-odyssey/internal/ui/views"
 )
@@ -35,26 +36,37 @@ type AppModel struct {
 	selectedAlchemyIdx int
 	selectedTavernIdx  int
 	tavernTab          int
+
+	selectedTitleIdx    int
+	titleMode           views.TitleMenuMode
+	saveSlots           []save.SaveSlotInfo
+	selectedSaveSlotIdx int
 }
 
 // NewAppModel creates a fresh TUI model
 func NewAppModel(eng *engine.Engine) *AppModel {
+	slots, _ := save.ListSaveSlots()
+
 	return &AppModel{
-		Engine:             eng,
-		width:              80,
-		height:             24,
-		selectedWorkerIdx:  0,
-		selectedBuildIdx:   0,
-		selectedRecipeIdx:  0,
-		selectedStatIdx:    0,
-		blacksmithTab:      0,
-		selectedWeaponIdx:  0,
-		selectedMarketIdx:  0,
-		marketTab:          0,
-		selectedRouteIdx:   0,
-		selectedAlchemyIdx: 0,
-		selectedTavernIdx:  0,
-		tavernTab:          0,
+		Engine:              eng,
+		width:               80,
+		height:              24,
+		selectedWorkerIdx:   0,
+		selectedBuildIdx:    0,
+		selectedRecipeIdx:   0,
+		selectedStatIdx:     0,
+		blacksmithTab:       0,
+		selectedWeaponIdx:   0,
+		selectedMarketIdx:   0,
+		marketTab:           0,
+		selectedRouteIdx:    0,
+		selectedAlchemyIdx:  0,
+		selectedTavernIdx:   0,
+		tavernTab:           0,
+		selectedTitleIdx:    0,
+		titleMode:           views.TitleModeMain,
+		saveSlots:           slots,
+		selectedSaveSlotIdx: 0,
 	}
 }
 
@@ -78,6 +90,14 @@ func (m *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 		switch m.Engine.CurrentState {
+		case engine.StateTitleScreen:
+			return m.updateTitleScreen(msg)
+		case engine.StateSaveMenu:
+			return m.updateSaveMenu(msg)
+		case engine.StateSiegeReport:
+			return m.updateSiegeReport(msg)
+		case engine.StateVictoryScreen:
+			return m.updateVictoryScreen(msg)
 		case engine.StateTownMenu:
 			return m.updateTownMenu(msg)
 		case engine.StateWorkerAssign:
@@ -117,6 +137,18 @@ func (m *AppModel) updateTownMenu(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, tea.Quit
 	case "d", "D":
 		m.Engine.PassDay()
+		_ = save.SaveGame(m.Engine, save.SlotAutosave)
+	case "s", "S":
+		slots, _ := save.ListSaveSlots()
+		m.saveSlots = slots
+		m.selectedSaveSlotIdx = 0
+		m.Engine.SwitchState(engine.StateSaveMenu)
+	case "m", "M":
+		slots, _ := save.ListSaveSlots()
+		m.saveSlots = slots
+		m.titleMode = views.TitleModeMain
+		m.selectedTitleIdx = 0
+		m.Engine.SwitchState(engine.StateTitleScreen)
 	case "w", "W":
 		m.Engine.SwitchState(engine.StateWorkerAssign)
 	case "1":
@@ -824,10 +856,178 @@ func (m *AppModel) updateTavernRecruit(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
+func (m *AppModel) updateTitleScreen(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	if m.titleMode == views.TitleModeMain {
+		switch msg.String() {
+		case "up", "k":
+			if m.selectedTitleIdx > 0 {
+				m.selectedTitleIdx--
+			} else {
+				m.selectedTitleIdx = 2
+			}
+			m.Engine.ClearAlert()
+		case "down", "j":
+			if m.selectedTitleIdx < 2 {
+				m.selectedTitleIdx++
+			} else {
+				m.selectedTitleIdx = 0
+			}
+			m.Engine.ClearAlert()
+		case "1":
+			m.Engine.SwitchState(engine.StateTownMenu)
+		case "2":
+			m.titleMode = views.TitleModeSelectSlot
+			slots, _ := save.ListSaveSlots()
+			m.saveSlots = slots
+			m.selectedSaveSlotIdx = 0
+			m.Engine.ClearAlert()
+		case "3", "q", "Q":
+			return m, tea.Quit
+		case "enter":
+			switch m.selectedTitleIdx {
+			case 0:
+				m.Engine.SwitchState(engine.StateTownMenu)
+			case 1:
+				m.titleMode = views.TitleModeSelectSlot
+				slots, _ := save.ListSaveSlots()
+				m.saveSlots = slots
+				m.selectedSaveSlotIdx = 0
+				m.Engine.ClearAlert()
+			case 2:
+				return m, tea.Quit
+			}
+		}
+	} else {
+		maxSlots := len(m.saveSlots)
+		switch msg.String() {
+		case "esc", "b", "B", "q", "Q":
+			m.titleMode = views.TitleModeMain
+			m.selectedTitleIdx = 1
+			m.Engine.ClearAlert()
+		case "up", "k":
+			if m.selectedSaveSlotIdx > 0 {
+				m.selectedSaveSlotIdx--
+			} else {
+				m.selectedSaveSlotIdx = maxSlots - 1
+			}
+			m.Engine.ClearAlert()
+		case "down", "j":
+			if m.selectedSaveSlotIdx < maxSlots-1 {
+				m.selectedSaveSlotIdx++
+			} else {
+				m.selectedSaveSlotIdx = 0
+			}
+			m.Engine.ClearAlert()
+		case "1", "2", "3", "4":
+			if len(msg.String()) == 1 {
+				idx := int(msg.String()[0] - '1')
+				if idx >= 0 && idx < maxSlots {
+					m.selectedSaveSlotIdx = idx
+					m.Engine.ClearAlert()
+				}
+			}
+		case "enter":
+			if m.selectedSaveSlotIdx < maxSlots {
+				sel := m.saveSlots[m.selectedSaveSlotIdx]
+				if sel.Exists {
+					loadedEng, err := save.LoadGame(sel.SlotID)
+					if err != nil {
+						m.Engine.SetAlert(err.Error())
+					} else {
+						m.Engine = loadedEng
+						m.titleMode = views.TitleModeMain
+						m.Engine.SwitchState(engine.StateTownMenu)
+					}
+				} else {
+					m.Engine.SetAlert(fmt.Sprintf("Slot %d masih kosong, belum ada data simpanan", m.selectedSaveSlotIdx+1))
+				}
+			}
+		}
+	}
+	return m, nil
+}
+
+func (m *AppModel) updateSaveMenu(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	manualSlots := []string{save.Slot1, save.Slot2, save.Slot3}
+	switch msg.String() {
+	case "esc", "b", "B", "q", "Q":
+		m.Engine.SwitchState(engine.StateTownMenu)
+	case "up", "k":
+		if m.selectedSaveSlotIdx > 0 {
+			m.selectedSaveSlotIdx--
+		} else {
+			m.selectedSaveSlotIdx = len(manualSlots) - 1
+		}
+		m.Engine.ClearAlert()
+	case "down", "j":
+		if m.selectedSaveSlotIdx < len(manualSlots)-1 {
+			m.selectedSaveSlotIdx++
+		} else {
+			m.selectedSaveSlotIdx = 0
+		}
+		m.Engine.ClearAlert()
+	case "1", "2", "3":
+		if len(msg.String()) == 1 {
+			idx := int(msg.String()[0] - '1')
+			if idx >= 0 && idx < len(manualSlots) {
+				m.selectedSaveSlotIdx = idx
+				m.Engine.ClearAlert()
+			}
+		}
+	case "enter":
+		if m.selectedSaveSlotIdx < len(manualSlots) {
+			slotID := manualSlots[m.selectedSaveSlotIdx]
+			if err := save.SaveGame(m.Engine, slotID); err != nil {
+				m.Engine.SetAlert(err.Error())
+			} else {
+				m.Engine.SetAlert(fmt.Sprintf("[+] Permainan berhasil disimpan di %s", slotID))
+				slots, _ := save.ListSaveSlots()
+				m.saveSlots = slots
+				m.Engine.SwitchState(engine.StateTownMenu)
+			}
+		}
+	}
+	return m, nil
+}
+
+func (m *AppModel) updateSiegeReport(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "enter", " ", "esc":
+		if m.Engine.CheckVictoryCondition() {
+			m.Engine.SwitchState(engine.StateVictoryScreen)
+		} else {
+			m.Engine.SwitchState(engine.StateTownMenu)
+		}
+	}
+	return m, nil
+}
+
+func (m *AppModel) updateVictoryScreen(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "enter", " ":
+		m.Engine.AcknowledgeVictory()
+	case "s", "S":
+		slots, _ := save.ListSaveSlots()
+		m.saveSlots = slots
+		m.selectedSaveSlotIdx = 0
+		m.Engine.SwitchState(engine.StateSaveMenu)
+	case "q", "Q", "esc":
+		m.titleMode = views.TitleModeMain
+		m.selectedTitleIdx = 0
+		m.Engine.SwitchState(engine.StateTitleScreen)
+	}
+	return m, nil
+}
+
 func (m *AppModel) updateExpeditionSummary(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
 	case "enter":
-		m.Engine.SwitchState(engine.StateTownMenu)
+		_ = save.SaveGame(m.Engine, save.SlotAutosave)
+		if m.Engine.CheckVictoryCondition() {
+			m.Engine.SwitchState(engine.StateVictoryScreen)
+		} else {
+			m.Engine.SwitchState(engine.StateTownMenu)
+		}
 	}
 	return m, nil
 }
@@ -835,6 +1035,18 @@ func (m *AppModel) updateExpeditionSummary(msg tea.KeyMsg) (tea.Model, tea.Cmd) 
 // View delegates rendering to the active screen view
 func (m *AppModel) View() string {
 	switch m.Engine.CurrentState {
+	case engine.StateTitleScreen:
+		selIdx := m.selectedTitleIdx
+		if m.titleMode == views.TitleModeSelectSlot {
+			selIdx = m.selectedSaveSlotIdx
+		}
+		return views.RenderTitleView(m.titleMode, selIdx, m.saveSlots, m.Engine.StatusAlert, m.width)
+	case engine.StateSaveMenu:
+		return views.RenderSaveMenuView(m.Engine, m.selectedSaveSlotIdx, m.saveSlots, m.width)
+	case engine.StateSiegeReport:
+		return views.RenderSiegeView(m.Engine, m.width)
+	case engine.StateVictoryScreen:
+		return views.RenderVictoryView(m.Engine, m.width)
 	case engine.StateTownMenu:
 		return views.RenderTownView(m.Engine, m.width)
 	case engine.StateWorkerAssign:

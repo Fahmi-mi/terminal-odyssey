@@ -54,5 +54,21 @@
     "base_wood_cost": 60,
     "base_stone_cost": 40,
     "base_gold_cost": 150
+  },
+  {
+    "name": "Menara Pengawas",
+    "description": "Menara pengintai untuk mendeteksi penyerbu (+20 Pertahanan per level)",
+    "max_level": 3,
+    "base_wood_cost": 45,
+    "base_stone_cost": 35,
+    "base_gold_cost": 90
+  },
+  {
+    "name": "Benteng Pertahanan",
+    "description": "Dinding barikade batu dan gerbang kayu kokoh (+30 Pertahanan per level)",
+    "max_level": 3,
+    "base_wood_cost": 65,
+    "base_stone_cost": 60,
+    "base_gold_cost": 140
   }
 ]

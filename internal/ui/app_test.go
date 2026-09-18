@@ -1,13 +1,16 @@
 package ui
 
 import (
+	"strings"
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/Fahmi-mi/terminal-odyssey/internal/combat"
 	"github.com/Fahmi-mi/terminal-odyssey/internal/engine"
+	"github.com/Fahmi-mi/terminal-odyssey/internal/save"
 	"github.com/Fahmi-mi/terminal-odyssey/internal/settlement"
+	"github.com/Fahmi-mi/terminal-odyssey/internal/ui/views"
 )
 
 func makeKeyMsg(k string) tea.KeyMsg {
@@ -332,3 +335,128 @@ func TestAppModel_PotionUseInDungeonAndCombat(t *testing.T) {
 	}
 }
 
+func TestAppModel_TitleScreenAndSaveLoad(t *testing.T) {
+	eng := engine.NewGame("Pahlawan", "Oakhaven")
+	eng.CurrentState = engine.StateTitleScreen
+	model := NewAppModel(eng)
+
+	// 1. Initial title screen mode
+	if model.titleMode != views.TitleModeMain {
+		t.Fatalf("expected titleMode views.TitleModeMain")
+	}
+
+	// 2. Press '1' to start new game
+	model.Update(makeKeyMsg("1"))
+	if model.Engine.CurrentState != engine.StateTownMenu {
+		t.Errorf("expected StateTownMenu, got %v", model.Engine.CurrentState)
+	}
+
+	// 3. Press 'S' from Town Menu to enter Save Menu
+	model.Update(makeKeyMsg("s"))
+	if model.Engine.CurrentState != engine.StateSaveMenu {
+		t.Errorf("expected StateSaveMenu, got %v", model.Engine.CurrentState)
+	}
+
+	// 4. Save to Slot 1 with 'enter'
+	tempSaveDir := t.TempDir()
+	// Set custom save path temporarily or test via save package directly
+	_ = save.SaveGame(model.Engine, save.Slot1, tempSaveDir)
+
+	// 5. Cancel back to town menu
+	model.Update(makeKeyMsg("esc"))
+	if model.Engine.CurrentState != engine.StateTownMenu {
+		t.Errorf("expected StateTownMenu after Esc, got %v", model.Engine.CurrentState)
+	}
+
+	// 6. Return to Title Screen via 'm'
+	model.Update(makeKeyMsg("m"))
+	if model.Engine.CurrentState != engine.StateTitleScreen {
+		t.Errorf("expected StateTitleScreen after 'm', got %v", model.Engine.CurrentState)
+	}
+
+	// 7. Open Load Slot selection with '2'
+	model.Update(makeKeyMsg("2"))
+	if model.titleMode != views.TitleModeSelectSlot {
+		t.Errorf("expected titleMode TitleModeSelectSlot after '2', got %v", model.titleMode)
+	}
+	if model.selectedSaveSlotIdx != 0 {
+		t.Errorf("expected initial selectedSaveSlotIdx 0, got %d", model.selectedSaveSlotIdx)
+	}
+	viewSlot0 := model.View()
+	if !strings.Contains(viewSlot0, "▶ [1] Slot 1") {
+		t.Errorf("expected view to highlight slot 1, got:\n%s", viewSlot0)
+	}
+
+	// Test Arrow Down moves to Slot 2
+	model.Update(makeKeyMsg("down"))
+	if model.selectedSaveSlotIdx != 1 {
+		t.Errorf("expected selectedSaveSlotIdx 1 after down arrow, got %d", model.selectedSaveSlotIdx)
+	}
+	viewSlot1 := model.View()
+	if !strings.Contains(viewSlot1, "▶ [2] Slot 2") {
+		t.Errorf("expected view to highlight slot 2, got:\n%s", viewSlot1)
+	}
+
+	// Test Arrow Up moves back to Slot 1
+	model.Update(makeKeyMsg("up"))
+	if model.selectedSaveSlotIdx != 0 {
+		t.Errorf("expected selectedSaveSlotIdx 0 after up arrow, got %d", model.selectedSaveSlotIdx)
+	}
+	if !strings.Contains(model.View(), "▶ [1] Slot 1") {
+		t.Errorf("expected view to highlight slot 1 after up arrow")
+	}
+
+	// Test direct numeric key jump to Slot 3 (index 2)
+	model.Update(makeKeyMsg("3"))
+	if model.selectedSaveSlotIdx != 2 {
+		t.Errorf("expected selectedSaveSlotIdx 2 after pressing '3', got %d", model.selectedSaveSlotIdx)
+	}
+	if !strings.Contains(model.View(), "▶ [3] Slot 3") {
+		t.Errorf("expected view to highlight slot 3 after pressing '3'")
+	}
+
+	// 8. Return to Title Main with 'esc'
+	model.Update(makeKeyMsg("esc"))
+	if model.titleMode != views.TitleModeMain {
+		t.Errorf("expected titleMode TitleModeMain after Esc, got %v", model.titleMode)
+	}
+}
+
+func TestAppModel_SiegeReportAndVictoryNavigation(t *testing.T) {
+	eng := engine.NewGame("Pahlawan", "Oakhaven")
+	model := NewAppModel(eng)
+
+	// 1. Trigger siege report
+	eng.TriggerDirectSiege("bandit_raiders")
+	if model.Engine.CurrentState != engine.StateSiegeReport {
+		t.Fatalf("expected StateSiegeReport, got %v", model.Engine.CurrentState)
+	}
+
+	// Press enter to proceed to town menu
+	model.Update(makeKeyMsg("enter"))
+	if model.Engine.CurrentState != engine.StateTownMenu {
+		t.Errorf("expected StateTownMenu after siege confirmation, got %v", model.Engine.CurrentState)
+	}
+
+	// 2. Trigger Victory Screen
+	eng.BossDefeated = true
+	eng.Village.Buildings[settlement.BuildingTownHall] = 3
+	eng.Village.Buildings[settlement.BuildingFortification] = 2
+	eng.Village.RecalculateDefense()
+	if eng.CheckVictoryCondition() {
+		eng.SwitchState(engine.StateVictoryScreen)
+	}
+
+	if model.Engine.CurrentState != engine.StateVictoryScreen {
+		t.Fatalf("expected StateVictoryScreen, got %v", model.Engine.CurrentState)
+	}
+
+	// Press Enter to continue to sandbox mode
+	model.Update(makeKeyMsg("enter"))
+	if model.Engine.CurrentState != engine.StateTownMenu {
+		t.Errorf("expected StateTownMenu after acknowledging victory, got %v", model.Engine.CurrentState)
+	}
+	if !model.Engine.VictoryAcknowledged {
+		t.Errorf("expected VictoryAcknowledged to be true")
+	}
+}

@@ -32,7 +32,14 @@
     "type": "combat",
     "title": "Kamar Persemayaman Terlarang",
     "description": "Pintu gerbang besi hitam terbuka memperlihatkan tahta batu nisan kuno. Panglima makam berbaju zirah legam bangkit mengayunkan gada raksasa penuh aura dendam",
-    "enemy_ids": ["tomb_overseer"]
+    "enemy_ids": ["tomb_overseer", "abyssal_overlord"]
+  },
+  {
+    "id": "combat_abyssal_sanctum",
+    "type": "combat",
+    "title": "Kuil Kegelapan Abyssal",
+    "description": "Ruang altar terdalam katakombe berhawa mencekam. Sosok Penguasa Abyssal melayang di atas genangan darah kuno menatapmu penuh murka",
+    "enemy_ids": ["abyssal_overlord"]
   },
   {
     "id": "treasure_cache",
